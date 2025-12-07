@@ -316,14 +316,15 @@ class ExperimentRunner:
                     memory = ConversationHistory(system_role=model.system_role, system_prompt=model.system_prompt)
                     state = ExperimentState(topic=topic, memory=memory)
 
-                    for stage_name in self.settings.plan:
-                        stage_runner = self.stage_runners[stage_name]
-                        state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client)
-                        if state.error:
-                            print(f"[WARNING] in stage '{stage_name}': {state.error}. Stopping pipeline for this topic.", file=sys.stderr)
-                            state.error = None
-                    
-                    if self.settings.full_log:
-                        print(f"\n{'--'*10} Full Log {'--'*10}", file=sys.stderr)
-                        all_messages = state.memory.get_all_messages()
-                        pprint.pprint(all_messages, stream=sys.stderr)
+                    try:
+                        for stage_name in self.settings.plan:
+                            stage_runner = self.stage_runners[stage_name]
+                            state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client)
+                            if state.error:
+                                print(f"[WARNING] in stage '{stage_name}': {state.error}. Stopping pipeline for this topic.", file=sys.stderr)
+                                state.error = None
+                    finally:
+                        if self.settings.full_log and state and state.memory:
+                            print(f"\n{'--'*10} Full Log {'--'*10}", file=sys.stderr)
+                            all_messages = state.memory.get_all_messages()
+                            pprint.pprint(all_messages, stream=sys.stderr)
