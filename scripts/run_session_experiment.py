@@ -43,19 +43,19 @@ my_settings = ExperimentSettings(
         # serp_size=20,
     ),
     topicset=TopicDescription(
-        name="aquaint/trec-robust-2005",
+        name="beir/dbpedia-entity/dev",
         type="ir_datasets",
-        topic_class=FullTopic
+        topic_class=TitleOnlyTopic
     ),
     corpus=CorpusDescription(
-        name="Aquaint",
-        description="A document collection of about 1M English newswire text. Sources include the Xinhua News Service (1996-2000), the New York Times News Service (1998-2000), and the Associated Press Worldstream News Service (1998-2000).",
-        index_name="aquaint_bm25",
+        name="DBPedia Entity",
+        description="A BEIR benchmark corpus built from DBPedia passages describing Wikipedia entities.",
+        index_name="dbpedia_entity_bm25",
     ),
     models=[
         ModelDescription(
             type="openai",
-            name="gpt-4.1-mini-2025-04-14",
+            name="openai/gpt-oss-120b",
             system_prompt="You're a helpful assistant",
             temperature=0.0,
         ),
@@ -94,25 +94,25 @@ my_settings = ExperimentSettings(
         ToolDescription(
             name="opensearch",
             ranking_model="bm25",
-            index_name="aquaint_bm25",
+            index_name="dbpedia_entity_bm25",
             port=9200,
-            description="It allows you to perform searches using keywords only and employs the BM25 ranking model to order results.",
+            description="BEIR DBPedia Entity corpus searchable with keyword-only BM25 ranking.",
         ),
         # ToolDescription(
         #     name="opensearch",
         #     ranking_model="splade",
         #     encode_model="naver/splade-cocondenser-ensembledistil",
-        #     index_name="aquaint_splade",
+        #     index_name="dbpedia_entity_splade",
         #     port=9200,
-        #     description="It allows you to perform searches using keywords only and employs the SPLADE ranking model to order results.",
+        #     description="BEIR DBPedia Entity corpus searchable with SPLADE term expansion ranking.",
         # ),
         # ToolDescription(
         #     name="opensearch",
         #     ranking_model="dpr",
         #     encode_model="sentence-transformers/msmarco-distilbert-base-tas-b",
-        #     index_name="aquaint_dpr",
+        #     index_name="dbpedia_entity_dpr",
         #     port=9200,
-        #     description="It allows you to perform searches using keywords only and employs the DPR ranking model to order results.",
+        #     description="BEIR DBPedia Entity corpus searchable with DPR dense retrieval ranking.",
         # ),
     ],
     stages={
@@ -126,7 +126,15 @@ my_settings = ExperimentSettings(
         ),
         "click": StageConfig(
             instruction="""
-                Select a set of documents that are likely to contain relevant information to the search topic. Return an empty list if none of the results appears relevant.
+                Select the results most likely to be relevant to the topic. Return an empty list if none look relevant.
+                Use ONLY the rank numbers shown in the SERP (e.g., 1–10). Do not invent larger numbers or document IDs/titles.
+                When listing multiple ranks, separate them with commas in the JSON array (e.g., [2, 3, 5]); do NOT concatenate them into a single number (e.g., [235]).
+                Respond with JSON only: {"ranking_list": [rank_numbers], "reason": "<one short sentence>"}.
+                Examples (follow exactly):
+                  - Valid: {"ranking_list": [1, 3], "reason": "These best match the topic"}
+                  - Valid empty: {"ranking_list": [], "reason": "None look relevant"}
+                  - Invalid (out of range): {"ranking_list": [27]}
+                  - Invalid (non-ranks): {"ranking_list": ["docA", "docB"]}
             """,
         ),
         "relevance": StageConfig(
@@ -140,9 +148,9 @@ my_settings = ExperimentSettings(
             """,
         ),
     },
-    plan=["query", "ranking", "click", "relevance", "reformulate", "ranking"],
+    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
     max_topics=1,
-    full_log=False
+    full_log=True
 )
 
 if __name__ == "__main__":
