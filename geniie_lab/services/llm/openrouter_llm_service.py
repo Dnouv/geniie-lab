@@ -1,10 +1,11 @@
 # Standard library
+import logging
 import os
 from typing import Callable, Protocol, Type, TypeVar
 
 # Third-party libraries
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from openai.types.chat import ChatCompletionUserMessageParam
 from pydantic import BaseModel
 import tiktoken
@@ -43,6 +44,7 @@ class OpenRouterLLMService:
         "text-embedding-3-small": 8191,
         "text-embedding-3-large": 8191,
     }
+    _MAX_JSON_RETRIES = 3
 
     def __init__(self):
         load_dotenv()
@@ -65,18 +67,40 @@ class OpenRouterLLMService:
         messages: list[ChatCompletionUserMessageParam] = [
             ChatCompletionUserMessageParam(role="user", content=msg["content"]) for msg in messages_dicts
         ]
-        completion = self.client.beta.chat.completions.parse(
-            model=model,
-            messages=messages,
-            response_format=response_model,
-            temperature=temperature,
-        )
-        parsed_response = completion.choices[0].message.parsed
-        if parsed_response is None:
-            raise ValueError(f"LLM returned empty parsed object for {response_model.__name__}.")
-        memory.add_assistant_response(completion.choices[0].message.to_json())
 
-        return parsed_response
+        last_error: Exception | None = None
+        for attempt in range(1, self._MAX_JSON_RETRIES + 1):
+            try:
+                completion = self.client.beta.chat.completions.parse(
+                    model=model,
+                    messages=messages,
+                    response_format=response_model,
+                    temperature=temperature,
+                )
+                parsed_response = completion.choices[0].message.parsed
+                if parsed_response is None:
+                    raise ValueError(f"LLM returned empty parsed object for {response_model.__name__}.")
+                memory.add_assistant_response(completion.choices[0].message.to_json())
+                return parsed_response
+            except BadRequestError as exc:
+                last_error = exc
+                if self._should_retry_rate_limit(exc) and attempt < self._MAX_JSON_RETRIES:
+                    logging.warning(
+                        "Retrying %s due to rate-limit/timeout (attempt %s/%s).",
+                        response_model.__name__,
+                        attempt + 1,
+                        self._MAX_JSON_RETRIES,
+                    )
+                    continue
+                raise
+        if last_error:
+            raise last_error
+        raise RuntimeError("LLM call failed without exception.")
+
+    @staticmethod
+    def _should_retry_rate_limit(exc: BadRequestError) -> bool:
+        message = str(exc).lower()
+        return "rate limit" in message or "timeout" in message or "overloaded" in message
 
     def get_tokenizer(self, model_name: str) -> Callable[[str], int]:
 
