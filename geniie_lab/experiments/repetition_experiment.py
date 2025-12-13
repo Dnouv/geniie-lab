@@ -2,6 +2,7 @@ import sys
 import pprint
 from dataclasses import dataclass
 import ir_datasets
+import ir_measures
 from typing import Protocol, Dict, Type
 from itertools import islice
 
@@ -96,6 +97,14 @@ class RankingStage:
         for result in state.serp.results:
             run.add(state.topic.id, result.docid, result.ranking)
         results = MeasureService().calc(settings.task.measurement, qrels, run)
+
+        # Additional recall@100 using top-100 retrieval (no extra LLM tokens).
+        recall_run = Run()
+        top100_docids = opensearch_client.search_docids(query_text, start=0, size=100)
+        for idx, docid in enumerate(top100_docids, start=1):
+            recall_run.add(state.topic.id, docid, idx)
+        recall_metrics = MeasureService().calc([ir_measures.Recall@100], qrels, recall_run)
+        results.update(recall_metrics)
 
         output = RankingExperimentOutput(
             session_name=settings.name,
