@@ -71,6 +71,7 @@ class OpenAILLMService:
                     messages=messages,
                     response_format=response_model,
                     temperature=temperature,
+                    reasoning_effort="low",
                 )
                 parsed_response = completion.choices[0].message.parsed
                 if parsed_response is None:
