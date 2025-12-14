@@ -142,3 +142,26 @@ class OpenSearchClientSplade:
                 snippet=snippet_text
             ))
         return Serp(hits=total_hits, results=items)
+
+    def search_docids(
+        self,
+        query: str,
+        start: int = 0,
+        size: int = 100
+    ) -> list[str]:
+        bow_query = self.splade_encode_to_bow(query, self.tokenizer, self.model)
+        search_body = {
+            "from": start,
+            "size": size,
+            "query": {
+                "match": {
+                    "splade_text": {
+                        "query": bow_query
+                    }
+                }
+            },
+            "_source": ["docid"],
+        }
+        response = self.client.search(index=self.index_name, body=search_body)
+        hits = response.get("hits", {}).get("hits", [])
+        return [hit.get("_source", {}).get("docid") for hit in hits if hit.get("_source")]

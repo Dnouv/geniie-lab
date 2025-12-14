@@ -53,6 +53,9 @@ class ExperimentState:
     error: Optional[str] = None
     action_num: Optional[int] = 1
     next_action: Optional[Action] = None
+    clicked_docids: set[str] = field(default_factory=set)
+    judged_docids: set[str] = field(default_factory=set)
+    judged_correct_relevant_docids: set[str] = field(default_factory=set)
 
 @dataclass
 class Error:

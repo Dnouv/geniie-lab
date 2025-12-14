@@ -149,3 +149,33 @@ class OpenSearchClientDPR:
             ))
 
         return Serp(hits=total_hits, results=items)
+
+    def search_docids(
+        self,
+        query: str,
+        start: int = 0,
+        size: int = 100
+    ) -> list[str]:
+        query_vector = self.model.encode(query).tolist()
+        search_body = {
+            "from": start,
+            "size": size,
+            "query": {
+                "nested": {
+                    "path": "passage_chunk",
+                    "score_mode": "max",
+                    "query": {
+                        "knn": {
+                            "passage_chunk.embedding": {
+                                "vector": query_vector,
+                                "k": size
+                            }
+                        }
+                    }
+                }
+            },
+            "_source": {"includes": ["docid"]},
+        }
+        response = self.client.search(index=self.index_name, body=search_body)
+        hits = response.get("hits", {}).get("hits", [])
+        return [hit.get("_source", {}).get("docid") for hit in hits if hit.get("_source")]

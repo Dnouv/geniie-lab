@@ -48,6 +48,8 @@ class ClickExperimentOutput(DataClassJsonMixin):
     dataset: str
     topic_id: str
     rankings: List[int]
+    doc_ids: Optional[List[str]] = None
+    duplicate_doc_ids: Optional[List[str]] = None
     repetition: Optional[str] = 1
     reason: Optional[str] = None
     stage: Optional[str] = "click"

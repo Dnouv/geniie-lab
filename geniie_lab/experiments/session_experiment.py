@@ -93,6 +93,10 @@ class RankingStage:
             if row.query_id == state.topic.id:
                 qrels.add(row.query_id, row.doc_id, row.relevance)
 
+        total_rels = sum(1 for item in qrels if item.relevance and item.relevance > 0)
+        cum_rel_found = len(state.judged_correct_relevant_docids)
+        cum_recall = (cum_rel_found / total_rels) if total_rels else 0.0
+
         run = Run()
         for result in state.serp.results:
             run.add(state.topic.id, result.docid, result.ranking)
@@ -105,6 +109,8 @@ class RankingStage:
             recall_run.add(state.topic.id, docid, idx)
         recall_metrics = MeasureService().calc([ir_measures.Recall@100], qrels, recall_run)
         results.update(recall_metrics)
+        results["CumRelFound"] = cum_rel_found
+        results["CumRecall"] = cum_recall
 
         output = RankingExperimentOutput(
             session_name=settings.name,
@@ -136,9 +142,37 @@ class ClickStage:
 
         print("\n--- Running: Click Stage ---", file=sys.stderr)
         instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
-        click_instruction = ClickInstruction(instruction=instruction_text, serp=state.serp)
+        click_instruction = ClickInstruction(
+            instruction=instruction_text,
+            serp=state.serp,
+            exclude_docids=sorted(state.clicked_docids),
+        )
 
+        def valid_ranks(ranks: list[int], max_rank: int) -> list[int]:
+            seen = set()
+            cleaned = []
+            for r in ranks:
+                if isinstance(r, bool):
+                    continue
+                if isinstance(r, (int, float)) and int(r) == r:
+                    r_int = int(r)
+                    if 1 <= r_int <= max_rank and r_int not in seen:
+                        seen.add(r_int)
+                        cleaned.append(r_int)
+            return cleaned
+
+        before_clicked = set(state.clicked_docids)
         state.clicks = llm_service.create_clicks(model.name, model.temperature, state.memory, click_instruction)
+        state.clicks.ranking_list = valid_ranks(state.clicks.ranking_list, len(state.serp.results))
+
+        clicked_docids = []
+        duplicate_docids = []
+        for rank in state.clicks.ranking_list:
+            docid = state.serp.results[rank - 1].docid
+            clicked_docids.append(docid)
+            if docid in before_clicked:
+                duplicate_docids.append(docid)
+            state.clicked_docids.add(docid)
 
         output = ClickExperimentOutput(
             session_name=settings.name,
@@ -146,7 +180,9 @@ class ClickStage:
             task=settings.task.name,
             dataset=settings.topicset.name,
             topic_id=state.topic.id,
-            rankings=state.clicks.ranking_list
+            rankings=state.clicks.ranking_list,
+            doc_ids=clicked_docids,
+            duplicate_doc_ids=duplicate_docids if duplicate_docids else None,
         )
         print(output.to_json(ensure_ascii=False))
 
@@ -196,6 +232,10 @@ class RelevanceJudgementStage:
             state.relevance_judgement = llm_service.calc_relevance_judgement(model.name, model.temperature, state.memory, rj_instruction)
 
             qrel_label = qrels.get(state.topic.id, click_docid, default=0)
+            state.judged_docids.add(click_docid)
+            label_value = getattr(state.relevance_judgement.label, "value", str(state.relevance_judgement.label))
+            if qrel_label and label_value == "Relevant":
+                state.judged_correct_relevant_docids.add(click_docid)
 
             output = RelevanceJudgementExperimentOutput(
                 session_name = settings.name,

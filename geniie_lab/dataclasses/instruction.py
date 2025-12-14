@@ -1,7 +1,7 @@
 # Standard library
 from dataclasses import dataclass
 from textwrap import dedent
-from typing import Union
+from typing import Union, Optional, List
 
 # Local application imports
 from geniie_lab.dataclasses.description import (
@@ -41,8 +41,17 @@ class QueryFormulationInstruction:
 class ClickInstruction:
     instruction: str
     serp: Serp
+    exclude_docids: Optional[List[str]] = None
 
     def generate(self) -> str:
+        exclude_block = ""
+        if self.exclude_docids:
+            exclude_preview = self.exclude_docids[:200]
+            suffix = "" if len(exclude_preview) == len(self.exclude_docids) else f"\n...(and {len(self.exclude_docids) - len(exclude_preview)} more)"
+            exclude_block = f"""
+            **Previously clicked docids (do NOT select again)**:
+            {exclude_preview}{suffix}
+            """
         content = f"""
             **Instruction**:
             {self.instruction}
@@ -51,6 +60,7 @@ class ClickInstruction:
             {self.serp.results}
 
             **Note**: Before response, ensure that all numbers in ranking_list match in the search results.
+            {exclude_block}
         """
         return dedent(content).strip()
 
