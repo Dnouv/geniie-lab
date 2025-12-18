@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import ir_datasets
 import ir_measures
 from typing import Protocol, Dict, Type
+from collections import defaultdict
 from itertools import islice
 
 from geniie_lab.dataclasses.setting import ExperimentSettings, ExperimentState, StageConfig, Error
@@ -312,6 +313,36 @@ class ExperimentRunner:
         self.llm_factory = LLMServiceFactory()
         self.opensearch_client_factory = OpenSearchClientFactory()
         self.topics = self._load_topics()
+        self._filter_topics_by_ids()
+        self._filter_topics_by_min_rels()
+        self._apply_max_topics()
+
+    def _filter_topics_by_min_rels(self) -> None:
+        if not self.settings.min_relevant_docs:
+            return
+        dataset = ir_datasets.load(self.settings.topicset.name)
+        rel_counts: Dict[str, int] = defaultdict(int)
+        for qrel in dataset.qrels_iter():
+            if getattr(qrel, "relevance", 0) and qrel.relevance > 0:
+                rel_counts[qrel.query_id] += 1
+        min_rels = self.settings.min_relevant_docs
+        self.topics = [topic for topic in self.topics if rel_counts.get(topic.id, 0) >= min_rels]
+        if not self.topics:
+            print(f"[WARNING] No topics meet min_relevant_docs >= {min_rels}.", file=sys.stderr)
+
+    def _filter_topics_by_ids(self) -> None:
+        if not self.settings.topic_ids:
+            return
+        wanted = set(self.settings.topic_ids)
+        list_cls = type(self.topics)
+        filtered = list_cls()
+        for topic in self.topics:
+            if topic.id in wanted:
+                filtered.append(topic)
+        self.topics = filtered
+        missing = wanted - {topic.id for topic in self.topics}
+        if missing:
+            print(f"[WARNING] Topic IDs not found: {sorted(missing)}", file=sys.stderr)
 
     def _load_topics(self) -> TopicList:
         dataset = ir_datasets.load(self.settings.topicset.name)
@@ -324,7 +355,7 @@ class ExperimentRunner:
         topics = list_cls()
 
         query_iter = dataset.queries_iter()
-        if self.settings.max_topics:
+        if self.settings.max_topics and not self.settings.min_relevant_docs:
             query_iter = islice(query_iter, self.settings.max_topics)
 
         for raw in query_iter:
@@ -332,6 +363,15 @@ class ExperimentRunner:
             topics.append(topic)
 
         return topics
+
+    def _apply_max_topics(self) -> None:
+        if not self.settings.max_topics:
+            return
+        list_cls = type(self.topics)
+        limited = list_cls()
+        for topic in islice(self.topics, self.settings.max_topics):
+            limited.append(topic)
+        self.topics = limited
     
     def _get_topic_mapper(self):
         topic_cls: Type[BaseTopic] = self.settings.topicset.topic_class

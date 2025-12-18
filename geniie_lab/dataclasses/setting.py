@@ -36,6 +36,8 @@ class ExperimentSettings:
     loop_num_per_topic: int = 1
     plan: Optional[List[str]] = None  # List of stage names to execute in order
     max_topics: Optional[int] = None # None means all topics
+    topic_ids: Optional[List[str]] = None  # Optional list of topic IDs to run.
+    min_relevant_docs: Optional[int] = None  # Filter topics by qrel relevance>0 count.
     max_actions: Optional[int] = None
     custom_settings: Optional[str] = None
     full_log: Optional[bool] = False
