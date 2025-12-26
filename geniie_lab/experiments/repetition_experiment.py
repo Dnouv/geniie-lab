@@ -408,7 +408,11 @@ class ExperimentRunner:
                 for topic in self.topics:
                     print(f"\n{'--'*10} Topic: {topic.id} ({topic.title}) {'--'*10}", file=sys.stderr)
 
-                    memory = ConversationHistory(system_role=model.system_role, system_prompt=model.system_prompt)
+                    memory = ConversationHistory(
+                        system_role=model.system_role,
+                        system_prompt=model.system_prompt,
+                        memory_policy=self.settings.memory_policy,
+                    )
                     state = ExperimentState(topic=topic, memory=memory)
 
                     llm_service = self.llm_factory.create_llm_service(model.type)

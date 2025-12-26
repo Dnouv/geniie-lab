@@ -280,7 +280,7 @@ class QueryReFormulationStage:
             topic_id = state.topic.id,
             query = state.query.query,
             start = settings.task.start_offset,
-            size=settings.task.serp_size
+            size = settings.task.serp_size
         )
         print(output.to_json(ensure_ascii=False))
 
@@ -402,7 +402,11 @@ class ExperimentRunner:
                     llm_service = self.llm_factory.create_llm_service(model.type)
                     print(f"\n{'--'*10} Topic: {topic.id} ({topic.title}) {'--'*10}", file=sys.stderr)
 
-                    memory = ConversationHistory(system_role=model.system_role, system_prompt=model.system_prompt)
+                    memory = ConversationHistory(
+                        system_role=model.system_role,
+                        system_prompt=model.system_prompt,
+                        memory_policy=self.settings.memory_policy,
+                    )
                     state = ExperimentState(topic=topic, memory=memory)
 
                     try:

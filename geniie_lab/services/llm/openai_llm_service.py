@@ -19,6 +19,7 @@ from geniie_lab.dataclasses.instruction import (
 )
 from geniie_lab.memory import ConversationHistory
 from geniie_lab.response import Clicks, NextAction, Query, RelevanceJudgement
+from geniie_lab.services.llm.llm_utils import instruction_stage, extract_message_reasoning
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -57,7 +58,8 @@ class OpenAILLMService:
         response_model: Type[T]
     ) -> T:
 
-        memory.add_user_message(instruction.generate())
+        stage = instruction_stage(instruction)
+        memory.add_user_message(instruction.generate(), stage=stage)
         messages_dicts: list[dict[str, str]] = memory.get_messages(tokenizer=self.get_tokenizer(model), max_tokens=self.get_max_tokens(model))
         messages: list[ChatCompletionUserMessageParam] = [
             ChatCompletionUserMessageParam(role="user", content=msg["content"]) for msg in messages_dicts
@@ -73,10 +75,12 @@ class OpenAILLMService:
                     temperature=temperature,
                     reasoning_effort="low",
                 )
-                parsed_response = completion.choices[0].message.parsed
+                message = completion.choices[0].message
+                parsed_response = message.parsed
                 if parsed_response is None:
                     raise ValueError(f"LLM returned empty parsed object for {response_model.__name__}.")
-                memory.add_assistant_response(completion.choices[0].message.to_json())
+                reasoning = extract_message_reasoning(message) if stage in {"query", "reformulate"} else None
+                memory.add_assistant_response(message.to_json(), stage=stage, reasoning=reasoning)
                 return parsed_response
             except BadRequestError as exc:
                 last_error = exc

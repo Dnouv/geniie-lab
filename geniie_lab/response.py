@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -24,18 +24,18 @@ class Query(BaseModel):
         title="query",
         description="The query string submitted to the search tool."
     )
-    start: int = Field(
+    start: Optional[int] = Field(
         0,
         title="start",
         description=(
-            "The starting index of the search results. Defaults to 0. "
+            "The starting index of the search results. Optional; defaults to task start_offset."
         )
     )
-    size: int = Field(
+    size: Optional[int] = Field(
         10,
         title="size",
         description=(
-            "The number of documents per search result page. Defaults to 10. "
+            "The number of documents per search result page. Optional; defaults to task serp_size."
         )
     )
     reason: str = Field(
@@ -43,6 +43,17 @@ class Query(BaseModel):
         title="reason",
         description="A brief explanation of the intent behind your query."
     )
+
+    @classmethod
+    def model_json_schema(cls, *args, **kwargs):
+        schema = super().model_json_schema(*args, **kwargs)
+        properties = schema.get("properties", {})
+        for key in ("start", "size"):
+            properties.pop(key, None)
+        schema["properties"] = properties
+        if "required" in schema:
+            schema["required"] = [key for key in schema["required"] if key not in {"start", "size"}]
+        return schema
 
 class Clicks(BaseModel):
     """
