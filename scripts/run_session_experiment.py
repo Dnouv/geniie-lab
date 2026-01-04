@@ -30,7 +30,7 @@ my_settings = ExperimentSettings(
         description="Find as many different relevant documents as possible for a given search topic from a given document collection using a provided search tool.",
         measurement=[ir_measures.nDCG@10, ir_measures.MRR@10],
         start_offset=0,
-        serp_size=10,
+        serp_size=20,
         # name = "High-Precision Retrieval",
         # description = "Find the most relevant documents at the top rank for a given search topic from a given document collection using a provided search tool.",
         # measurement=[ir_measures.nDCG@10, ir_measures.MRR@10],
@@ -43,7 +43,7 @@ my_settings = ExperimentSettings(
         # serp_size=20,
     ),
     topicset=TopicDescription(
-        name="beir/dbpedia-entity/dev",
+        name="beir/dbpedia-entity/test",
         type="ir_datasets",
         topic_class=TitleOnlyTopic
     ),
@@ -119,6 +119,11 @@ my_settings = ExperimentSettings(
         "query": StageConfig(
             instruction="""
                 Review the provided descriptions of task, corpus, tool and search topic. Then, formulate a search query.
+                Respond ONLY with a JSON object in this exact format (no markdown, no prose, no code fences):
+                {
+                "query": "your query",
+                "reason": "short sentence"
+                }
             """,
         ),
         "ranking": StageConfig(
@@ -126,30 +131,67 @@ my_settings = ExperimentSettings(
         ),
         "click": StageConfig(
             instruction="""
-                Select the results most likely to be relevant to the topic. Return an empty list if none look relevant.
-                Use ONLY the rank numbers shown in the SERP (e.g., 1–10). Do not invent larger numbers or document IDs/titles.
-                When listing multiple ranks, separate them with commas in the JSON array (e.g., [2, 3, 5]); do NOT concatenate them into a single number (e.g., [235]).
-                Respond with JSON only: {"ranking_list": [rank_numbers], "reason": "<one short sentence>"}.
-                Examples (follow exactly):
-                  - Valid: {"ranking_list": [1, 3], "reason": "These best match the topic"}
-                  - Valid empty: {"ranking_list": [], "reason": "None look relevant"}
-                  - Invalid (out of range): {"ranking_list": [27]}
-                  - Invalid (non-ranks): {"ranking_list": ["docA", "docB"]}
+                You are given a SERP with results numbered 1–N.
+                Select up to 10 NEW documents that look relevant to the topic (previously clicked docids are shown; do NOT select them again).
+
+                Respond ONLY with a single JSON object in the exact multiline format below:
+
+                {
+                "ranking_list": [
+                    1
+                    3
+                    8
+                ],
+                "reason": "short sentence"
+                }
+
+                Rules:
+                - Each rank MUST appear on its own line inside the array. Make sure to not miss any line breaks.
+                - No combined numbers (e.g., 128).
+                - Every rank must be within 1..N (only ranks shown in the SERP).
+                - Do not duplicate ranks.
+                - Do not output any keys other than `ranking_list` and `reason`.
+                - If none are relevant, output:
+
+                {
+                "ranking_list": [
+
+                ],
+                "reason": "None look relevant"
+                }
             """,
         ),
         "relevance": StageConfig(
             instruction="""
                 Evaluate the relevance of the document based on the search topic description and its narrative.
+                Return ONLY this JSON:
+                {
+                "label": "Relevant" or "NotRelevant",
+                "reason": "short sentence"
+                }
+                Do not output ranking_list or any other keys.
             """,
         ),
         "reformulate": StageConfig(
             instruction="""
-                Formulate another search query to find new relevant documents.
+                Formulate another search query to find new relevant documents. Make sure to consider previous relevant documents found our goal here
+                is to maximize the recall rate, the search index in use is BM25 so try to come up with strategies that can help retrieve more relevant documents.
+                Here are the {metrics} so far, please use them to guide your reformulation. We need to improve our recall! We don't care about the query length as long as it is unique and helps retrieve new relevant documents.
+                Try to maximize the recall rate by finding new relevant documents in every reformulation should reach near 0.9 recall if possible.
+                Your output MUST be ONLY a JSON object in this exact format (no markdown, no prose, no code fences):
+                {
+                "query": "your query",
+                "reason": "short sentence"
+                }
             """,
         ),
     },
-    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
-    max_topics=1,
+    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 10),
+    max_topics=3,
+    topic_ids=["INEX_LD-2009039", "INEX_LD-2009063", "INEX_LD-20120411"],
+    min_relevant_docs=100,
+    memory_policy="forget_queries_keep_reason",
+    memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True
 )
 

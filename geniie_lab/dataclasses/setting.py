@@ -39,6 +39,7 @@ class ExperimentSettings:
     topic_ids: Optional[List[str]] = None  # Optional list of topic IDs to run.
     min_relevant_docs: Optional[int] = None  # Filter topics by qrel relevance>0 count.
     memory_policy: Optional[Literal["full", "forget_queries", "forget_queries_half", "forget_queries_keep_reason", "forget_queries_keep_reasoning"]] = None
+    memory_metrics: Optional[List[str]] = None  # Metric keys to include in LLM context.
     max_actions: Optional[int] = None
     custom_settings: Optional[str] = None
     full_log: Optional[bool] = False
@@ -59,6 +60,8 @@ class ExperimentState:
     clicked_docids: set[str] = field(default_factory=set)
     judged_docids: set[str] = field(default_factory=set)
     judged_correct_relevant_docids: set[str] = field(default_factory=set)
+    metrics_context: Optional[str] = None
+    retrieved_relevant_docids_top100: set[str] = field(default_factory=set)
 
 @dataclass
 class Error:

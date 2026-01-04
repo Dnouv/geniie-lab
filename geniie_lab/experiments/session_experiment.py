@@ -31,6 +31,7 @@ from geniie_lab.dataclasses.output import (
     RelevanceJudgementExperimentOutput,
 )
 from geniie_lab.memory import ConversationHistory
+from geniie_lab.experiments.prompt_utils import render_instruction
 from geniie_lab.services.llm.llm_service_factory import LLMServiceFactory
 from geniie_lab.services.llm.llm_service_protocol import LLMServiceProtocol
 from geniie_lab.services.measure_service import MeasureService, Qrels, Run
@@ -53,6 +54,7 @@ class QueryFormulationStage:
     def run(self, settings: ExperimentSettings, state: ExperimentState, llm_service: LLMServiceProtocol, model: ModelDescription, tool: ToolDescription, opensearch_client: OpenSearchClientProtocol) -> ExperimentState:
         print("\n--- Running: Query Formulation Stage ---", file=sys.stderr)
         instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
+        instruction_text = render_instruction(instruction_text, state)
         qf_instruction = QueryFormulationInstruction(instruction=instruction_text, task=settings.task, corpus=settings.corpus, tool=tool, topic=state.topic)
 
         state.query = llm_service.create_query(model.name, model.temperature, state.memory, qf_instruction)
@@ -73,6 +75,23 @@ class QueryFormulationStage:
 class RankingStage:
     def __init__(self, config: StageConfig):
         self.config = config
+    
+    @staticmethod
+    def _set_metrics_context(settings: ExperimentSettings, state: ExperimentState, results: Dict[str, float]) -> None:
+        if not settings.memory_metrics:
+            return
+        parts = []
+        for key in settings.memory_metrics:
+            if key not in results:
+                continue
+            value = results[key]
+            if isinstance(value, float):
+                parts.append(f"{key}: {value:.4f}")
+            else:
+                parts.append(f"{key}: {value}")
+        if not parts:
+            return
+        state.metrics_context = "Latest retrieval metrics:\n" + "\n".join(parts)
 
     def run(self, settings: ExperimentSettings, state: ExperimentState, llm_service: LLMServiceProtocol, model: ModelDescription, tool: ToolDescription, opensearch_client: OpenSearchClientProtocol) -> ExperimentState:
         print("\n--- Running: Ranking Stage ---", file=sys.stderr)
@@ -110,8 +129,18 @@ class RankingStage:
             recall_run.add(state.topic.id, docid, idx)
         recall_metrics = MeasureService().calc([ir_measures.Recall@100], qrels, recall_run)
         results.update(recall_metrics)
+
+        for docid in top100_docids:
+            qrel_label = qrels.get(state.topic.id, docid, default=0)
+            if qrel_label and qrel_label > 0:
+                state.retrieved_relevant_docids_top100.add(docid)
+        cum_recall_100 = (len(state.retrieved_relevant_docids_top100) / total_rels) if total_rels else 0.0
+        results["CumRelFound@100"] = len(state.retrieved_relevant_docids_top100)
+        results["CumRecall@100"] = cum_recall_100
         results["CumRelFound"] = cum_rel_found
         results["CumRecall"] = cum_recall
+
+        self._set_metrics_context(settings, state, results)
 
         output = RankingExperimentOutput(
             session_name=settings.name,
@@ -143,6 +172,7 @@ class ClickStage:
 
         print("\n--- Running: Click Stage ---", file=sys.stderr)
         instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
+        instruction_text = render_instruction(instruction_text, state)
         click_instruction = ClickInstruction(
             instruction=instruction_text,
             serp=state.serp,
@@ -228,6 +258,7 @@ class RelevanceJudgementStage:
             state.fulltext = fulltext_or_error
 
             instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
+            instruction_text = render_instruction(instruction_text, state)
             rj_instruction = RelevanceJudgementInstruction(instruction=instruction_text, fulltext=state.fulltext)
 
             state.relevance_judgement = llm_service.calc_relevance_judgement(model.name, model.temperature, state.memory, rj_instruction)
@@ -268,6 +299,7 @@ class QueryReFormulationStage:
 
         print("\n--- Running: Query Re-formulation Stage ---", file=sys.stderr)
         instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
+        instruction_text = render_instruction(instruction_text, state)
         qrf_instruction = QueryReFormulationInstruction(instruction=instruction_text)
 
         state.query = llm_service.recreate_query(model.name, model.temperature, state.memory, qrf_instruction)
