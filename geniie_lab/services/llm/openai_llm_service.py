@@ -73,7 +73,7 @@ class OpenAILLMService:
                     messages=messages,
                     response_format=response_model,
                     temperature=temperature,
-                    reasoning_effort="low",
+                    # reasoning_effort="low",
                 )
                 message = completion.choices[0].message
                 parsed_response = message.parsed

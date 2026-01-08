@@ -55,7 +55,7 @@ my_settings = ExperimentSettings(
     models=[
         ModelDescription(
             type="openai",
-            name="openai/gpt-oss-120b",
+            name="meta-llama/llama-4-maverick-17b-128e-instruct",
             system_prompt="You're a helpful assistant",
             temperature=0.0,
         ),
@@ -176,7 +176,7 @@ my_settings = ExperimentSettings(
             instruction="""
                 Formulate another search query to find new relevant documents. Make sure to consider previous relevant documents found our goal here
                 is to maximize the recall rate, the search index in use is BM25 so try to come up with strategies that can help retrieve more relevant documents.
-                Here are the {metrics} so far, please use them to guide your reformulation. We need to improve our recall! We don't care about the query length as long as it is unique and helps retrieve new relevant documents.
+                Here are the {metrics} so far, please use them to guide your reformulation. We need to improve our recall! 
                 Try to maximize the recall rate by finding new relevant documents in every reformulation should reach near 0.9 recall if possible.
                 Try to learn from the documents text you have found relevant so far and use them to guide your next query reformulation.
                 Your output MUST be ONLY a JSON object in this exact format (no markdown, no prose, no code fences):
