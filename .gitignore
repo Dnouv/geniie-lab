@@ -198,3 +198,6 @@ logs/*
 
 *.jsonl
 *.tsv
+
+# Analyses
+analyses/*
