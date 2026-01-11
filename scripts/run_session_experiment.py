@@ -206,6 +206,7 @@ my_settings = ExperimentSettings(
                 Here are the {metrics} so far, please use them to guide your reformulation. We need to improve our recall! 
                 Try to maximize the recall rate by finding new relevant documents in every reformulation should reach near 0.9 recall if possible.
                 Try to learn from the documents text you have found relevant so far and use them to guide your next query reformulation.
+                New queries must include more than or equal to 5 new aspect terms or entity names or relevant keywords that were not in previous queries.
                 Your output MUST be ONLY a JSON object in this exact format (no markdown, no prose, no code fences):
                 {
                 "query": "your query",
