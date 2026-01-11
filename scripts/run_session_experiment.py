@@ -55,7 +55,7 @@ my_settings = ExperimentSettings(
     models=[
         ModelDescription(
             type="openai",
-            name="meta-llama/llama-4-maverick-17b-128e-instruct",
+            name="openai/gpt-oss-120b",
             system_prompt="You're a helpful assistant",
             temperature=0.0,
         ),
@@ -91,12 +91,39 @@ my_settings = ExperimentSettings(
         # )
     ],
     tools=[
+        # ToolDescription(
+        #     name="opensearch",
+        #     ranking_model="bm25",
+        #     index_name="dbpedia_entity_bm25",
+        #     port=9200,
+        #     description="BEIR DBPedia Entity corpus searchable with keyword-only BM25 ranking.",
+        # ),
+        # ToolDescription(
+        #     name="opensearch",
+        #     ranking_model="bm25_rm3",
+        #     index_name="dbpedia_entity_bm25",
+        #     port=9200,
+        #     prf_docs=10,
+        #     prf_terms=20,
+        #     description="BM25 with RM3-style pseudo relevance feedback.",
+        # ),
+        # ToolDescription(
+        #     name="opensearch",
+        #     ranking_model="bm25_dense",
+        #     encode_model="sentence-transformers/all-MiniLM-L6-v2",
+        #     index_name="dbpedia_entity_bm25",
+        #     port=9200,
+        #     rerank_top_k=100,
+        #     description="BM25 candidate generation with dense bi-encoder reranking.",
+        # ),
         ToolDescription(
             name="opensearch",
-            ranking_model="bm25",
+            ranking_model="bm25_cross_encoder",
+            encode_model="cross-encoder/ms-marco-MiniLM-L-6-v2",
             index_name="dbpedia_entity_bm25",
             port=9200,
-            description="BEIR DBPedia Entity corpus searchable with keyword-only BM25 ranking.",
+            rerank_top_k=100,
+            description="BM25 candidate generation with cross-encoder reranking.",
         ),
         # ToolDescription(
         #     name="opensearch",
@@ -191,7 +218,7 @@ my_settings = ExperimentSettings(
     max_topics=3,
     topic_ids=["INEX_LD-2009039", "INEX_LD-2009063", "INEX_LD-20120411"],
     min_relevant_docs=100,
-    memory_policy="forget_queries_keep_reason",
+    memory_policy="full",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True
 )

@@ -24,6 +24,10 @@ The following parameters can be configured via `ExperimentSettings` in the runne
 |Tool|All|`ranking_model`|bm25|Name of ranking model used by the tool|
 |Tool|All|`index_name`|aquaint_bm25|Name of index files used by the tool|
 |Tool|All|`port`|9200|Port number of opensearch client|
+|Tool|All|`encode_model`|sentence-transformers/all-MiniLM-L6-v2|Encoder model used for neural ranking or reranking (optional)|
+|Tool|All|`rerank_top_k`|100|Number of BM25 candidates to rerank for neural rerankers (optional)|
+|Tool|All|`prf_docs`|10|Number of feedback documents for RM3-style pseudo relevance feedback (optional)|
+|Tool|All|`prf_terms`|20|Number of expansion terms for RM3-style pseudo relevance feedback (optional)|
 |Tool|All|`description`|It allows you to perform searches using keywords only and employs the BM25 ranking model to order results.|Description of the tool, query syntax (if any), and ranking model.|
 |Stage|All|`instruction`|Review the provided descriptions of task, corpus, tool and search topic. Then, formulate a search query.|Instruction given to GII for each of the stages.|
 |Other|Session, Repetition|`plan`|\["query", "ranking", "click", "relevance", "reformulate", "ranking"\]|A series of search stages to be executed as a single session.|

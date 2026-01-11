@@ -2,6 +2,9 @@ import os
 from geniie_lab.dataclasses.description import ToolDescription
 from geniie_lab.dataclasses.setting import ExperimentSettings
 from geniie_lab.services.opensearch.opensearch_client_bm25 import OpenSearchClientBM25
+from geniie_lab.services.opensearch.opensearch_client_bm25_rm3 import OpenSearchClientBM25RM3
+from geniie_lab.services.opensearch.opensearch_client_bm25_dense import OpenSearchClientBM25Dense
+from geniie_lab.services.opensearch.opensearch_client_bm25_cross_encoder import OpenSearchClientBM25CrossEncoder
 from geniie_lab.services.opensearch.opensearch_client_dpr import OpenSearchClientDPR
 from geniie_lab.services.opensearch.opensearch_client_protocol import OpenSearchClientProtocol
 from geniie_lab.services.opensearch.opensearch_client_splade import OpenSearchClientSplade
@@ -20,6 +23,33 @@ class OpenSearchClientFactory:
                 port=tool.port,
                 dataset_name = settings.topicset.name,
                 http_auth=http_auth
+            )
+        elif tool.ranking_model == "bm25_rm3":
+            return OpenSearchClientBM25RM3(
+                index_name=tool.index_name,
+                port=tool.port,
+                dataset_name=settings.topicset.name,
+                http_auth=http_auth,
+                prf_docs=tool.prf_docs,
+                prf_terms=tool.prf_terms
+            )
+        elif tool.ranking_model == "bm25_dense":
+            return OpenSearchClientBM25Dense(
+                index_name=tool.index_name,
+                port=tool.port,
+                dataset_name=settings.topicset.name,
+                http_auth=http_auth,
+                encode_model=tool.encode_model,
+                rerank_top_k=tool.rerank_top_k
+            )
+        elif tool.ranking_model == "bm25_cross_encoder":
+            return OpenSearchClientBM25CrossEncoder(
+                index_name=tool.index_name,
+                port=tool.port,
+                dataset_name=settings.topicset.name,
+                http_auth=http_auth,
+                encode_model=tool.encode_model,
+                rerank_top_k=tool.rerank_top_k
             )
         elif tool.ranking_model == "splade":
             return OpenSearchClientSplade(

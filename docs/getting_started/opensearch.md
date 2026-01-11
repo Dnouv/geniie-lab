@@ -19,6 +19,8 @@ tools=[
 
 You can list multiple `ToolDescription` in `ExperimentalSettings`. Then the experiment will repeat the whole process across the ranking models.
 
+The following example mixes classic and neural rankers. `bm25_rm3`, `bm25_dense`, and `bm25_cross_encoder` all use the same BM25 index for candidate generation, so you do not need a new index to try them.
+
 ```
 tools=[
     ToolDescription(
@@ -27,6 +29,33 @@ tools=[
         index_name="aquaint_bm25",
         port=9200,
         description="It allows you to perform searches using keywords only and employs the BM25 ranking model to order results.",
+    ),
+    ToolDescription(
+        name="opensearch",
+        ranking_model="bm25_rm3",
+        index_name="aquaint_bm25",
+        port=9200,
+        prf_docs=10,
+        prf_terms=20,
+        description="BM25 with RM3-style pseudo relevance feedback.",
+    ),
+    ToolDescription(
+        name="opensearch",
+        ranking_model="bm25_dense",
+        encode_model="sentence-transformers/all-MiniLM-L6-v2",
+        index_name="aquaint_bm25",
+        port=9200,
+        rerank_top_k=100,
+        description="BM25 candidate generation with dense bi-encoder reranking.",
+    ),
+    ToolDescription(
+        name="opensearch",
+        ranking_model="bm25_cross_encoder",
+        encode_model="cross-encoder/ms-marco-MiniLM-L-6-v2",
+        index_name="aquaint_bm25",
+        port=9200,
+        rerank_top_k=100,
+        description="BM25 candidate generation with cross-encoder reranking.",
     ),
     ToolDescription(
         name="opensearch",
