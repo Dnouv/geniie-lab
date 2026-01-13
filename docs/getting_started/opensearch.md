@@ -74,3 +74,20 @@ tools=[
         description="It allows you to perform searches using keywords only and employs the Splade ranking model to order results.",
     ),
 ```
+
+## SPLADE indexing (separate index)
+
+SPLADE requires a dedicated index with a `splade_text` field. Use `scripts/index_splade.py` to build it.
+
+```
+python scripts/index_splade.py \
+    --dataset beir/dbpedia-entity \
+    --index dbpedia_entity_splade \
+    --host localhost --port 9200 --no-ssl \
+    --batch-size 200 --encode-batch-size 8
+```
+
+Notes:
+- Use the same `encode_model` in `ToolDescription` as the `--model` used for indexing.
+- For quick sanity checks, add `--max-docs 10000`.
+- SPLADE indexing is CPU/GPU intensive; it will run much faster on a GPU.

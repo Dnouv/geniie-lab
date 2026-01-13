@@ -57,7 +57,8 @@ class OpenSearchClientFactory:
                 port=tool.port,
                 dataset_name = settings.topicset.name,
                 http_auth=http_auth,
-                encode_model=tool.encode_model
+                encode_model=tool.encode_model,
+                device=tool.device
             )
         elif tool.ranking_model == "dpr":
             return OpenSearchClientDPR(

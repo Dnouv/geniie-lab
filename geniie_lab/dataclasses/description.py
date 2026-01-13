@@ -43,3 +43,4 @@ class ToolDescription:
     rerank_top_k: Optional[int] = None
     prf_docs: Optional[int] = None
     prf_terms: Optional[int] = None
+    device: Optional[str] = None

@@ -26,7 +26,8 @@ class OpenSearchClientSplade:
         host: str = "localhost",
         port: int = 9200,
         http_auth: Optional[tuple[str, str]] = None,
-        use_ssl: bool = True
+        use_ssl: bool = True,
+        device: Optional[str] = None,
     ):
         self.client = OpenSearch(
             hosts=[{"host": host, "port": port}],
@@ -45,25 +46,36 @@ class OpenSearchClientSplade:
         self.model = AutoModelForMaskedLM.from_pretrained(model_name)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model.eval()
-        if torch.cuda.is_available():
-            self.model.cuda()
+        self.device = torch.device(self._resolve_device(device))
+        self.model.to(self.device)
 
-    @torch.no_grad()
-    def splade_encode_to_bow(self, text, tokenizer, model, max_doc_length=512, top_k=30):
+    @staticmethod
+    def _resolve_device(requested: Optional[str]) -> str:
+        if requested:
+            return requested
+        try:
+            if torch.cuda.is_available():
+                return "cuda"
+        except Exception:
+            pass
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
+
+    @torch.inference_mode()
+    def splade_encode_to_bow(self, text: str, max_doc_length: int = 512, top_k: int = 30) -> str:
         """
         Encode input text using SPLADE and return a weighted BoW string.
 
         :param text: input string (document or chunk)
-        :param tokenizer: HuggingFace tokenizer
-        :param model: SPLADE model (masked LM)
         :param max_doc_length: max input tokens (SPLADE supports long input)
         :param top_k: number of top tokens to keep by weight
         :return: string of repeated tokens (weighted BoW)
         """
-        inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=max_doc_length)
-        inputs = {k: v.cuda() for k, v in inputs.items()}
+        inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=max_doc_length)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
-        outputs = model(**inputs)
+        outputs = self.model(**inputs)
         logits = outputs.logits.squeeze(0)  # [seq_len, vocab_size]
 
         # Apply log1p(ReLU(x)) to each token dimension (SPLADE's sparse activation trick)
@@ -77,7 +89,7 @@ class OpenSearchClientSplade:
         # Build weighted term list: repeat each token according to its weight
         bow_tokens = []
         for token_id, weight in zip(token_ids, weights):
-            token = tokenizer.convert_ids_to_tokens(token_id)
+            token = self.tokenizer.convert_ids_to_tokens(token_id)
             repeat_count = max(1, int(round(weight)))
             bow_tokens.extend([token] * repeat_count)
 
@@ -105,7 +117,7 @@ class OpenSearchClientSplade:
         start: int = 0,
         size: int = 10
     ) -> Serp:
-        bow_query = self.splade_encode_to_bow(query, self.tokenizer, self.model)
+        bow_query = self.splade_encode_to_bow(query)
         search_body = {
             "from": start,
             "size": size,
@@ -149,7 +161,7 @@ class OpenSearchClientSplade:
         start: int = 0,
         size: int = 100
     ) -> list[str]:
-        bow_query = self.splade_encode_to_bow(query, self.tokenizer, self.model)
+        bow_query = self.splade_encode_to_bow(query)
         search_body = {
             "from": start,
             "size": size,
