@@ -138,7 +138,7 @@ my_settings = ExperimentSettings(
     max_topics=3,
     topic_ids=["INEX_LD-2009039", "INEX_LD-2009063", "INEX_LD-20120411"],
     min_relevant_docs=100,
-    memory_policy="forget_queries_keep_reason",
+    memory_policy="forget_queries_half",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True
 )
