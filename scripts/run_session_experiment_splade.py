@@ -136,9 +136,9 @@ my_settings = ExperimentSettings(
         ),
     },
     plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
-    max_topics=3,
-    topic_ids=["INEX_LD-2009039", "INEX_LD-2009063", "INEX_LD-20120411"],
-    min_relevant_docs=100,
+    max_topics=5,
+    topic_ids=["INEX_LD‑2010069", "INEX_LD‑20120511", "INEX_XER‑86", "INEX_XER-140", "INEX_XER-144"],
+    # min_relevant_docs=100,
     memory_policy="forget_queries_half",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True
