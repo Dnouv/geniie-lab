@@ -34,7 +34,12 @@ my_settings = ExperimentSettings(
     ),
     corpus=CorpusDescription(
         name="TREC-COVID",
-        description="TREC-COVID benchmark built on CORD-19 for COVID-19 literature search.",
+        description=(
+            "The corpus consists of English-language biomedical research articles and preprints "
+            "on COVID-19 and related coronaviruses, including both studies published up to mid-2020 "
+            "and earlier historical research on viruses such as SARS and MERS. Each document is "
+            "represented by its title and abstract."
+        ),
         index_name="trec_covid_splade",
     ),
     models=[

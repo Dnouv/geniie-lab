@@ -49,7 +49,11 @@ my_settings = ExperimentSettings(
     ),
     corpus=CorpusDescription(
         name="DBPedia Entity",
-        description="A BEIR benchmark corpus built from DBPedia passages describing Wikipedia entities.",
+        description=(
+            "An entity-centric document collection derived from DBpedia, where each document "
+            "represents a Wikipedia/DBpedia entity with a short descriptive abstract. "
+            "It supports entity-focused search over people, places, organizations, and concepts."
+        ),
         index_name="dbpedia_entity_bm25",
     ),
     models=[
