@@ -96,7 +96,7 @@ my_settings = ExperimentSettings(
             ranking_model="bm25",
             index_name="dbpedia_entity_bm25",
             port=9200,
-            description="BEIR DBPedia Entity corpus searchable with keyword-only BM25 ranking.",
+            description="It allows you to perform searches using keywords only and employs the BM25 ranking model to order results.",
         ),
         # ToolDescription(
         #     name="opensearch",

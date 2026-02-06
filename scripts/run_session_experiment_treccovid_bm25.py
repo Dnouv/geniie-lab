@@ -51,7 +51,7 @@ my_settings = ExperimentSettings(
             ranking_model="bm25",
             index_name="trec_covid_bm25",
             port=9200,
-            description="TREC-COVID corpus searchable with keyword-only BM25 ranking.",
+            description="It allows you to perform searches using keywords only and employs the BM25 ranking model to order results.",
         ),
     ],
     stages={
