@@ -44,7 +44,7 @@ class OpenAILLMService:
         "text-embedding-3-small": 8191,
         "text-embedding-3-large": 8191,
     }
-    _MAX_JSON_RETRIES = 3
+    _MAX_JSON_RETRIES = 5
 
     def __init__(self):
         self.client = OpenAI()

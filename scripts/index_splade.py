@@ -273,13 +273,47 @@ def prepare_doc_source(args: argparse.Namespace) -> Tuple[Iterable, Optional[int
     return dataset, doc_count, args.dataset
 
 
+def _get_value(obj: Any, field: str) -> Any:
+    if isinstance(obj, dict):
+        return obj.get(field)
+    return getattr(obj, field, None)
+
+
+def _normalize_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        parts = [str(item) for item in value if item is not None]
+        return "\n".join(part for part in parts if part)
+    return str(value)
+
+
+def _extract_title_text(doc: Any) -> Tuple[str, str]:
+    title_fields = ("title", "source_title", "topic")
+    text_fields = ("text", "premises_texts", "conclusion", "source_text")
+
+    title = ""
+    for field in title_fields:
+        value = _normalize_text(_get_value(doc, field)).strip()
+        if value:
+            title = value
+            break
+
+    text_parts = []
+    for field in text_fields:
+        value = _normalize_text(_get_value(doc, field)).strip()
+        if value:
+            text_parts.append(value)
+    text = "\n".join(text_parts)
+    return title, text
+
+
 def iter_docs_ir(dataset) -> Iterator[Mapping[str, Any]]:
     for doc in dataset.docs_iter():
         docid = getattr(doc, "doc_id", None)
         if docid is None:
             raise ValueError("Dataset document is missing 'doc_id'.")
-        title = getattr(doc, "title", "") or ""
-        text = getattr(doc, "text", "") or ""
+        title, text = _extract_title_text(doc)
         yield {"docid": docid, "title": title, "text": text}
 
 
@@ -293,8 +327,7 @@ def iter_docs_hf(dataset) -> Iterator[Mapping[str, Any]]:
         )
         if docid is None:
             raise ValueError("Hugging Face document is missing an id field.")
-        title = doc.get("title", "") or ""
-        text = doc.get("text", "") or ""
+        title, text = _extract_title_text(doc)
         yield {"docid": docid, "title": title, "text": text}
 
 

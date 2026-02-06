@@ -12,45 +12,30 @@ from geniie_lab.dataclasses.description import (
     ToolDescription,
     TopicDescription,
 )
-from geniie_lab.dataclasses.topic import (
-    TitleDescriptionNarrativeTopic, FullTopic,
-    TitleDescriptionTopic,
-    TitleNarrativeTopic,
-    TitleOnlyTopic
-)
+from geniie_lab.dataclasses.topic import TitleOnlyTopic
 from geniie_lab.dataclasses.setting import ExperimentSettings, StageConfig
 from geniie_lab.experiments.session_experiment import ExperimentRunner
 
 load_dotenv()
 
 my_settings = ExperimentSettings(
-    name="my_session_experiment",
+    name="treccovid_session_bm25",
     task=TaskDescription(
         name="High-Recall Retrieval",
         description="Find as many different relevant documents as possible for a given search topic from a given document collection using a provided search tool.",
         measurement=[ir_measures.nDCG@10, ir_measures.MRR@10],
         start_offset=0,
         serp_size=20,
-        # name = "High-Precision Retrieval",
-        # description = "Find the most relevant documents at the top rank for a given search topic from a given document collection using a provided search tool.",
-        # measurement=[ir_measures.nDCG@10, ir_measures.MRR@10],
-        # start_offset=0,
-        # serp_size=10,
-        # name = "High-Diversity Retrieval",
-        # description = "Find a diverse set of relevant documents for a given search topic from a given document collection using a provided search tool.",
-        # measurement=[ir_measures.alpha_nDCG@20],
-        # start_offset=0,
-        # serp_size=20,
     ),
     topicset=TopicDescription(
-        name="beir/dbpedia-entity/test",
+        name="beir/trec-covid",
         type="ir_datasets",
         topic_class=TitleOnlyTopic
     ),
     corpus=CorpusDescription(
-        name="DBPedia Entity",
-        description="A BEIR benchmark corpus built from DBPedia passages describing Wikipedia entities.",
-        index_name="dbpedia_entity_bm25",
+        name="TREC-COVID",
+        description="TREC-COVID benchmark built on CORD-19 for COVID-19 literature search.",
+        index_name="trec_covid_bm25",
     ),
     models=[
         ModelDescription(
@@ -59,88 +44,15 @@ my_settings = ExperimentSettings(
             system_prompt="You're a helpful assistant",
             temperature=0.0,
         ),
-        # ModelDescription(
-        #     type="azure",
-        #     name="gpt-4.1-mini",
-        #     system_prompt="You're a helpful assistant",
-        #     temperature=0.0,
-        # ),
-        # ModelDescription(
-        #     type="gemini",
-        #     name="gemini-2.0-flash-lite-001",
-        #     system_prompt="You're a helpful assistant",
-        #     temperature=0.0,
-        # ),
-        # ModelDescription(
-        #     type="ollama",
-        #     name="qwen2.5:72b-instruct-q4_K_M",
-        #     system_prompt="You're a helpful assistant",
-        #     temperature=0.0,
-        # ),
-        # ModelDescription(
-        #     type="ollama",
-        #     name="llama3.3:70b-instruct-q4_K_M",
-        #     system_prompt="You're a helpful assistant",
-        #     temperature=0.0,
-        # ),
-        # ModelDescription(
-        #     type="openrouter",
-        #     name="openai/gpt-4.1-mini",
-        #     system_prompt="You're a helpful assistant",
-        #     temperature=0.0,
-        # )
     ],
     tools=[
         ToolDescription(
             name="opensearch",
             ranking_model="bm25",
-            index_name="dbpedia_entity_bm25",
+            index_name="trec_covid_bm25",
             port=9200,
-            description="BEIR DBPedia Entity corpus searchable with keyword-only BM25 ranking.",
+            description="TREC-COVID corpus searchable with keyword-only BM25 ranking.",
         ),
-        # ToolDescription(
-        #     name="opensearch",
-        #     ranking_model="bm25_rm3",
-        #     index_name="dbpedia_entity_bm25",
-        #     port=9200,
-        #     prf_docs=10,
-        #     prf_terms=20,
-        #     description="BM25 with RM3-style pseudo relevance feedback.",
-        # ),
-        # ToolDescription(
-        #     name="opensearch",
-        #     ranking_model="bm25_dense",
-        #     encode_model="sentence-transformers/all-MiniLM-L6-v2",
-        #     index_name="dbpedia_entity_bm25",
-        #     port=9200,
-        #     rerank_top_k=100,
-        #     description="BM25 candidate generation with dense bi-encoder reranking.",
-        # ),
-        # ToolDescription(
-        #     name="opensearch",
-        #     ranking_model="bm25_cross_encoder",
-        #     encode_model="cross-encoder/ms-marco-MiniLM-L-6-v2",
-        #     index_name="dbpedia_entity_bm25",
-        #     port=9200,
-        #     rerank_top_k=100,
-        #     description="BM25 candidate generation with cross-encoder reranking.",
-        # ),
-        # ToolDescription(
-        #     name="opensearch",
-        #     ranking_model="splade",
-        #     encode_model="naver/splade-cocondenser-ensembledistil",
-        #     index_name="dbpedia_entity_splade",
-        #     port=9200,
-        #     description="BEIR DBPedia Entity corpus searchable with SPLADE term expansion ranking.",
-        # ),
-        # ToolDescription(
-        #     name="opensearch",
-        #     ranking_model="dpr",
-        #     encode_model="sentence-transformers/msmarco-distilbert-base-tas-b",
-        #     index_name="dbpedia_entity_dpr",
-        #     port=9200,
-        #     description="BEIR DBPedia Entity corpus searchable with DPR dense retrieval ranking.",
-        # ),
     ],
     stages={
         "query": StageConfig(
@@ -213,9 +125,7 @@ my_settings = ExperimentSettings(
     },
     plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
     max_topics=3,
-    topic_ids=["INEX_LD-2009039", "INEX_LD-2009063", "INEX_LD-20120411"],
-    min_relevant_docs=100,
-    memory_policy="full",
+    memory_policy="forget_queries_keep_reason",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True
 )
