@@ -203,9 +203,6 @@ my_settings = ExperimentSettings(
             instruction="""
                 Formulate another search query to find new relevant documents. Make sure to consider previous relevant documents found our goal here
                 is to maximize the recall rate, the search index in use is BM25 so try to come up with strategies that can help retrieve more relevant documents.
-                Here are the {metrics} so far, please use them to guide your reformulation. We need to improve our recall! 
-                Try to maximize the recall rate by finding new relevant documents in every reformulation should reach near 0.9 recall if possible.
-                Try to learn from the documents text you have found relevant so far and use them to guide your next query reformulation.
                 Your output MUST be ONLY a JSON object in this exact format (no markdown, no prose, no code fences):
                 {
                 "query": "your query",
@@ -214,7 +211,7 @@ my_settings = ExperimentSettings(
             """,
         ),
     },
-    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 10),
+    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
     max_topics=3,
     topic_ids=["INEX_LD-2009039", "INEX_LD-2009063", "INEX_LD-20120411"],
     min_relevant_docs=100,
