@@ -1,4 +1,6 @@
 # Standard library
+import json
+import sys
 from typing import Callable, Protocol, Type, TypeVar
 
 # Third-party libraries
@@ -27,11 +29,23 @@ class InstructionWithGenerate(Protocol):
         ...
 
 class OllamaLLMService:
-    def __init__(self):
+    def __init__(self, log_llm_io: bool = False):
         self.client = OpenAI(
             base_url="http://localhost:11434/v1",
             api_key="ollama",  # required, but unused
         )
+        self.log_llm_io = log_llm_io
+
+    def _emit_llm_io(self, stage: str | None, model: str, direction: str, payload: dict) -> None:
+        if not self.log_llm_io:
+            return
+        record = {
+            "llm_io": direction,
+            "stage": stage,
+            "model": model,
+            **payload,
+        }
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
 
     def _call_llm_with_pydantic_response(
         self,
@@ -45,6 +59,7 @@ class OllamaLLMService:
         stage = instruction_stage(instruction)
         memory.add_user_message(instruction.generate(), stage=stage)
         messages_dicts: list[dict[str, str]] = memory.get_messages(tokenizer=self.get_tokenizer(model), max_tokens=self.get_max_tokens(model))
+        self._emit_llm_io(stage, model, "input", {"messages": messages_dicts})
         messages: list[ChatCompletionUserMessageParam] = [
             ChatCompletionUserMessageParam(role="user", content=msg["content"]) for msg in messages_dicts
         ]
@@ -59,6 +74,7 @@ class OllamaLLMService:
         if parsed_response is None:
             raise ValueError(f"LLM returned empty parsed object for {response_model.__name__}.")
         reasoning = extract_message_reasoning(message) if stage in {"query", "reformulate"} else None
+        self._emit_llm_io(stage, model, "output", {"message": message.to_json()})
         memory.add_assistant_response(message.to_json(), stage=stage, reasoning=reasoning)
         return parsed_response
 

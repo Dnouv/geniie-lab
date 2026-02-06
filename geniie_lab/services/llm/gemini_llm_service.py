@@ -1,6 +1,7 @@
 # Standard library
 import json
 import os
+import sys
 from typing import Any, Callable, Dict, List, Protocol, Type, TypeVar
 
 # Third-party libraries
@@ -29,8 +30,20 @@ class InstructionWithGenerate(Protocol):
         ...
 
 class GeminiLLMService:
-    def __init__(self):
+    def __init__(self, log_llm_io: bool = False):
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        self.log_llm_io = log_llm_io
+
+    def _emit_llm_io(self, stage: str | None, model: str, direction: str, payload: dict) -> None:
+        if not self.log_llm_io:
+            return
+        record = {
+            "llm_io": direction,
+            "stage": stage,
+            "model": model,
+            **payload,
+        }
+        print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
 
     def _call_llm_and_parse(
         self,
@@ -47,6 +60,7 @@ class GeminiLLMService:
             tokenizer=self.get_tokenizer(model),
             max_tokens=self.get_max_tokens(model)
         )
+        self._emit_llm_io(stage, model, "input", {"messages": openai_messages})
 
         system_prompt = openai_messages[0]['content'] if openai_messages and openai_messages[0]['role'] == 'system' else None
         gemini_contents: List[Dict[str, Any]] = []
@@ -69,6 +83,7 @@ class GeminiLLMService:
         )
         if response.text is None:
             raise ValueError(f"Response text is None for {response_model.__name__}.")
+        self._emit_llm_io(stage, model, "output", {"message": response.text})
         reasoning = extract_message_reasoning(getattr(response, "candidates", None)) if stage in {"query", "reformulate"} else None
         memory.add_assistant_response(response.text, stage=stage, reasoning=reasoning)
         data = json.loads(response.text)

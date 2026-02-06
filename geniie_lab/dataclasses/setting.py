@@ -43,6 +43,7 @@ class ExperimentSettings:
     max_actions: Optional[int] = None
     custom_settings: Optional[str] = None
     full_log: Optional[bool] = False
+    log_llm_io: Optional[bool] = False
 
 @dataclass
 class ExperimentState:

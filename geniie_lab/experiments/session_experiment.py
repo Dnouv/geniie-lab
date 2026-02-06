@@ -431,7 +431,7 @@ class ExperimentRunner:
                 opensearch_client = self.opensearch_client_factory.create_opensearch_client(settings=self.settings, tool=tool)
 
                 for topic in self.topics:
-                    llm_service = self.llm_factory.create_llm_service(model.type)
+                    llm_service = self.llm_factory.create_llm_service(model.type, log_llm_io=self.settings.log_llm_io)
                     print(f"\n{'--'*10} Topic: {topic.id} ({topic.title}) {'--'*10}", file=sys.stderr)
 
                     memory = ConversationHistory(

@@ -447,7 +447,7 @@ class ExperimentRunner:
                     )
                     state = ExperimentState(topic=topic, memory=memory)
 
-                    llm_service = self.llm_factory.create_llm_service(model.type)
+                    llm_service = self.llm_factory.create_llm_service(model.type, log_llm_io=self.settings.log_llm_io)
 
                     # Run all stages except the last one once, and accumulate memory
                     for stage_name in self.settings.plan[:-1]:
@@ -466,7 +466,7 @@ class ExperimentRunner:
                     stage_runner = self.stage_runners[last_stage]
                     for i in range(loop_num):
                         # Reset state for the last stage
-                        llm_service = self.llm_factory.create_llm_service(model.type)
+                        llm_service = self.llm_factory.create_llm_service(model.type, log_llm_io=self.settings.log_llm_io)
                         state.memory = base_memory.clone()
                         state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client, repetition=i+1)
                         if state.error:
