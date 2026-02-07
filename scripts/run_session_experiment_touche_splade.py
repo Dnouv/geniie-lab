@@ -12,19 +12,14 @@ from geniie_lab.dataclasses.description import (
     ToolDescription,
     TopicDescription,
 )
-from geniie_lab.dataclasses.topic import (
-    TitleDescriptionNarrativeTopic, FullTopic,
-    TitleDescriptionTopic,
-    TitleNarrativeTopic,
-    TitleOnlyTopic
-)
+from geniie_lab.dataclasses.topic import TitleOnlyTopic
 from geniie_lab.dataclasses.setting import ExperimentSettings, StageConfig
 from geniie_lab.experiments.session_experiment import ExperimentRunner
 
 load_dotenv()
 
 my_settings = ExperimentSettings(
-    name="my_session_experiment_splade",
+    name="touche2022_session_splade",
     task=TaskDescription(
         name="High-Recall Retrieval",
         description="Find as many different relevant documents as possible for a given search topic from a given document collection using a provided search tool.",
@@ -33,18 +28,14 @@ my_settings = ExperimentSettings(
         serp_size=20,
     ),
     topicset=TopicDescription(
-        name="beir/dbpedia-entity/test",
+        name="argsme/2020-04-01/processed/touche-2022-task-1",
         type="ir_datasets",
         topic_class=TitleOnlyTopic
     ),
     corpus=CorpusDescription(
-        name="DBPedia Entity",
-        description=(
-            "An entity-centric document collection derived from DBpedia, where each document "
-            "represents a Wikipedia/DBpedia entity with a short descriptive abstract. "
-            "It supports entity-focused search over people, places, organizations, and concepts."
-        ),
-        index_name="dbpedia_entity_splade",
+        name="Touché 2022 Task 1 (ArgsMe processed)",
+        description="Argument retrieval benchmark (Touché 2022 Task 1) on ArgsMe processed corpus.",
+        index_name="touche_2022_splade",
     ),
     models=[
         ModelDescription(
@@ -59,10 +50,9 @@ my_settings = ExperimentSettings(
             name="opensearch",
             ranking_model="splade",
             encode_model="naver/splade-cocondenser-ensembledistil",
-            index_name="dbpedia_entity_splade",
+            index_name="touche_2022_splade",
             port=9200,
-            device="mps",
-            description="BEIR DBPedia Entity corpus searchable with SPLADE term expansion ranking.",
+            description="Touché 2022 (ArgsMe processed) corpus searchable with SPLADE term expansion ranking.",
         ),
     ],
     stages={
@@ -92,11 +82,9 @@ my_settings = ExperimentSettings(
             """,
         ),
     },
-    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
-    max_topics=5,
-    topic_ids=["INEX_LD‑2010069", "INEX_LD‑20120511", "INEX_XER‑86", "INEX_XER-140", "INEX_XER-144"],
-    # min_relevant_docs=100,
-    memory_policy="forget_queries_half",
+    plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 10),
+    max_topics=3,
+    memory_policy="forget_queries_keep_reason",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True
 )
