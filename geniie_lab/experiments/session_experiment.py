@@ -423,6 +423,8 @@ class ExperimentRunner:
 
     def run(self):
         print(f"\n{'='*20} Experimental Setting: {self.settings.name} {'='*20}", file=sys.stderr)
+        memory_policy = self.settings.memory_policy or "full"
+        print(f"Memory policy: {memory_policy}", file=sys.stderr)
         for model in self.settings.models:
             print(f"\n{'='*20} Model: {model.name} ({model.type}) {'='*20}", file=sys.stderr)
 
