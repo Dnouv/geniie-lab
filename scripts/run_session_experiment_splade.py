@@ -94,16 +94,18 @@ my_settings = ExperimentSettings(
     },
     plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
     # max_topics=5,
-    topic_ids=["INEX_LD-2010069", "INEX_LD-20120511", "INEX_XER-86", "INEX_XER-140", "INEX_XER-144"],
+    topic_ids=["INEX_LD-2010069", "INEX_LD-2010004", "INEX_LD-2010043", "INEX_XER-113", "INEX_XER-96"],
+    # topic_ids=["QALD2_te-17", "QALD2_tr-64", "QALD2_tr-51", "QALD2_tr-26", "QALD2_te-63"],
     # min_relevant_docs=100,
-    memory_policy="forget_queries_keep_reason",
+    memory_policy="forget_queries_half",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True,
     # Keep raw LLM I/O logs and use resilient stage handling:
-    # retry up to 2 extra times per stage (3 total attempts), then fallback where supported.
     log_llm_io=True,
     failure_policy="resilient",
+    # retry up to 2 extra times per stage (3 total attempts), then fallback where supported:
     stage_failure_retries=2,
+    topic_sleep_seconds=20,
 )
 
 if __name__ == "__main__":

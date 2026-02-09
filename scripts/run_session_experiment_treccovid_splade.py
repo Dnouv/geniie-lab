@@ -88,8 +88,9 @@ my_settings = ExperimentSettings(
         ),
     },
     plan=["query", "ranking"] + (["click", "relevance", "reformulate", "ranking"] * 19),
-    max_topics=3,
-    memory_policy="forget_queries_keep_reason",
+    # max_topics=3,
+    topic_ids=["5", "6", "13", "35", "45"],
+    memory_policy="forget_queries_half",
     memory_metrics=["RR@10", "nDCG@10", "R@100", "CumRecall", "CumRecall@100"],
     full_log=True,
     # Keep raw LLM I/O logs and use resilient stage handling:
@@ -97,6 +98,7 @@ my_settings = ExperimentSettings(
     log_llm_io=True,
     failure_policy="resilient",
     stage_failure_retries=2,
+    topic_sleep_seconds=20,
 )
 
 if __name__ == "__main__":

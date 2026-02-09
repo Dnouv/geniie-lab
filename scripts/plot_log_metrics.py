@@ -172,6 +172,12 @@ def ensure_output_dir(path: str) -> Path:
     return out_path
 
 
+def compute_bar_figsize(num_iterations: int, num_topics: int, min_width: float = 11.0, min_height: float = 6.0) -> tuple[float, float]:
+    width = max(min_width, num_iterations * 0.8 + num_topics * 1.2)
+    height = max(min_height, 4.5 + num_topics * 0.1)
+    return (width, height)
+
+
 def build_topic_palette(topics: Iterable[str]) -> Dict[str, tuple]:
     """
     Map topics to distinct colours pulled from tab20 for consistent bar styling.
@@ -233,12 +239,13 @@ def plot_metric_by_topic(
         print(f"[WARN] No data for {metric_key}, skipping {output_path.name}")
         return
 
-    plt.figure(figsize=(11, 6))
     topics = sorted(per_topic.keys())
     all_iterations = sorted({it for pairs in per_topic.values() for it, _ in pairs})
     if not all_iterations:
         print(f"[WARN] No iterations found for {metric_key}")
         return
+    fig_width, fig_height = compute_bar_figsize(len(all_iterations), len(topics))
+    plt.figure(figsize=(fig_width, fig_height))
 
     palette = build_topic_palette(topics)
     base_positions = list(range(len(all_iterations)))
@@ -426,9 +433,10 @@ def plot_query_length_trajectories(query_records: List[dict], output_path: Path,
     per_topic: Dict[str, List[tuple[int, int]]] = defaultdict(list)
     for rec in query_records:
         per_topic[rec["topic_id"]].append((rec["iteration"], rec["query_length"]))
-    plt.figure(figsize=(11, 6))
     topics = sorted(per_topic.keys())
     all_iterations = sorted({it for pairs in per_topic.values() for it, _ in pairs})
+    fig_width, fig_height = compute_bar_figsize(len(all_iterations), len(topics))
+    plt.figure(figsize=(fig_width, fig_height))
     palette = build_topic_palette(topics)
     base_positions = list(range(len(all_iterations)))
     bar_width = 0.8 / max(1, len(topics))
@@ -472,8 +480,8 @@ def plot_duplicate_clicks(click_records: List[dict], output_path: Path, topic_la
         return
     topics = sorted(per_topic.keys())
     all_iters = sorted({i for topic_data in per_topic.values() for i in topic_data.keys()})
-    fig_width = max(8, len(all_iters) * 0.8)
-    plt.figure(figsize=(fig_width, 4.5))
+    fig_width, fig_height = compute_bar_figsize(len(all_iters), len(topics), min_width=9.0, min_height=4.8)
+    plt.figure(figsize=(fig_width, fig_height))
     bar_width = 0.8 / max(1, len(topics))
     base_positions = list(range(len(all_iters)))
     palette = build_topic_palette(topics)
@@ -550,34 +558,54 @@ def plot_jaccard_similarity(
     query_records: List[dict],
     output_path: Path,
     model_names: List[str],
+    topic_labels: Dict[str, str] | None = None,
 ) -> None:
     if not query_records:
         print(f"[WARN] No query records to plot {output_path.name}")
         return
-    per_iter_sims: Dict[int, List[float]] = defaultdict(list)
     per_topic: Dict[str, List[Tuple[int, str]]] = defaultdict(list)
     for rec in query_records:
         per_topic[rec["topic_id"]].append((rec["iteration"], rec["query"]))
+    per_topic_sims: Dict[str, List[Tuple[int, float]]] = defaultdict(list)
     for topic, records in per_topic.items():
         records.sort()
         for i in range(1, len(records)):
             prev_q = records[i - 1][1]
             cur_it, cur_q = records[i]
             sim = jaccard_similarity(prev_q, cur_q)
-            per_iter_sims[cur_it].append(sim)
-    iterations = sorted(per_iter_sims.keys())
-    if not iterations:
+            per_topic_sims[topic].append((cur_it, sim))
+    if not per_topic_sims:
         print(f"[WARN] No similarity data to plot {output_path.name}")
         return
-    avg_sims = [sum(per_iter_sims[i]) / len(per_iter_sims[i]) for i in iterations]
-    plt.figure(figsize=(8, 4.5))
-    plt.plot(iterations, avg_sims, marker="o", color="tab:green")
+
+    topics = sorted(per_topic_sims.keys())
+    all_iterations = sorted({it for pairs in per_topic_sims.values() for it, _ in pairs})
+    fig_width = max(8, len(all_iterations) * 0.8 + len(topics) * 0.8)
+    plt.figure(figsize=(fig_width, 4.8))
+    palette = build_topic_palette(topics)
+    for topic in topics:
+        pairs = per_topic_sims.get(topic, [])
+        if not pairs:
+            continue
+        its = [it for it, _ in pairs]
+        sims = [val for _, val in pairs]
+        plt.plot(
+            its,
+            sims,
+            marker="o",
+            linewidth=1.6,
+            markersize=4,
+            color=palette[topic],
+            label=(topic_labels or {}).get(topic, topic),
+        )
     plt.xlabel("Query iteration (>=2)")
-    plt.ylabel("Average Jaccard similarity to previous query")
+    plt.ylabel("Jaccard similarity to previous query")
     title_model = ", ".join(sorted(set(model_names))) if model_names else "unknown model"
     plt.title(f"Query reformulation similarity\nModel(s): {title_model}")
+    plt.xticks(all_iterations)
     plt.ylim(0, 1)
     plt.grid(alpha=0.3)
+    plt.legend(bbox_to_anchor=(1.04, 1), loc="upper left", fontsize="small")
     plt.tight_layout()
     plt.savefig(output_path, dpi=200)
     plt.close()
@@ -694,7 +722,7 @@ def main() -> None:
     plot_combined_metrics(ranking_records, combined_path, model_names)
 
     jaccard_path = output_dir / "query_jaccard_similarity.png"
-    plot_jaccard_similarity(query_records, jaccard_path, model_names)
+    plot_jaccard_similarity(query_records, jaccard_path, model_names, topic_labels)
 
     if len(args.log) > 1:
         jaccard_runs_path = output_dir / "query_jaccard_similarity_across_runs.png"

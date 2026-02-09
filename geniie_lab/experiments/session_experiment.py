@@ -1,6 +1,7 @@
 import sys
 import json
 import pprint
+import time
 from dataclasses import dataclass
 import ir_datasets
 import ir_measures
@@ -408,9 +409,8 @@ class ExperimentRunner:
 
     @staticmethod
     def _is_retryable_stage(stage_name: str) -> bool:
-        # Query/reformulate are typically deterministic at temperature=0;
-        # retrying them on non-transient errors mostly duplicates failures.
-        return stage_name not in {"query", "reformulate"}
+        # Allow retries for all stages, including query/reformulate.
+        return True
 
     def _apply_resilient_fallback(
         self,
@@ -618,3 +618,5 @@ class ExperimentRunner:
                             print(f"\n{'--'*10} Full Log {'--'*10}", file=sys.stderr)
                             all_messages = state.memory.get_all_messages()
                             pprint.pprint(all_messages, stream=sys.stderr)
+                    if self.settings.topic_sleep_seconds > 0:
+                        time.sleep(self.settings.topic_sleep_seconds)

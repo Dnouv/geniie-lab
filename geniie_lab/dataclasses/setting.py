@@ -46,6 +46,7 @@ class ExperimentSettings:
     log_llm_io: Optional[bool] = False
     failure_policy: Literal["strict", "resilient"] = "strict"
     stage_failure_retries: int = 2
+    topic_sleep_seconds: float = 0.0
 
 @dataclass
 class ExperimentState:
