@@ -88,7 +88,12 @@ my_settings = ExperimentSettings(
     },
     plan=["query"],
     max_topics=5,
-    full_log=False
+    full_log=False,
+    # Keep raw LLM I/O logs and use resilient stage handling:
+    # retry up to 2 extra times per stage (3 total attempts), then fallback where supported.
+    log_llm_io=True,
+    failure_policy="resilient",
+    stage_failure_retries=2,
 )
 
 if __name__ == "__main__":
