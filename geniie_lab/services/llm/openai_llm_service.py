@@ -1,4 +1,5 @@
 # Standard library
+import ast
 import json
 import logging
 import sys
@@ -63,6 +64,29 @@ class OpenAILLMService:
         }
         print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
 
+    def _emit_llm_error(
+        self,
+        stage: str | None,
+        model: str,
+        response_model_name: str,
+        attempt: int,
+        exc: Exception,
+    ) -> None:
+        payload: dict = {
+            "attempt": attempt,
+            "response_model": response_model_name,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        if isinstance(exc, BadRequestError):
+            error_body = self._extract_error_body(exc)
+            if error_body is not None:
+                payload["error_body"] = error_body
+                err = error_body.get("error")
+                if isinstance(err, dict) and "failed_generation" in err:
+                    payload["failed_generation"] = err.get("failed_generation")
+        self._emit_llm_io(stage, model, "error", payload)
+
     def _call_llm_with_pydantic_response(
         self,
         model: str,
@@ -88,7 +112,7 @@ class OpenAILLMService:
                     messages=messages,
                     response_format=response_model,
                     temperature=temperature,
-                    reasoning_effort="low",
+                    reasoning_effort="low"
                 )
                 message = completion.choices[0].message
                 parsed_response = message.parsed
@@ -100,6 +124,10 @@ class OpenAILLMService:
                 return parsed_response
             except BadRequestError as exc:
                 last_error = exc
+                self._emit_llm_error(stage, model, response_model.__name__, attempt, exc)
+                salvaged = self._try_salvage_failed_generation(exc, response_model, stage, model, memory)
+                if salvaged is not None:
+                    return salvaged
                 if self._should_retry_rate_limit(exc) and attempt < self._MAX_JSON_RETRIES:
                     logging.warning(
                         "Retrying %s due to rate-limit/timeout (attempt %s/%s).",
@@ -109,9 +137,104 @@ class OpenAILLMService:
                     )
                     continue
                 raise
+            except Exception as exc:
+                self._emit_llm_error(stage, model, response_model.__name__, attempt, exc)
+                raise
         if last_error:
             raise last_error
         raise RuntimeError("LLM call failed without exception.")
+
+    def _try_salvage_failed_generation(
+        self,
+        exc: BadRequestError,
+        response_model: Type[T],
+        stage: str | None,
+        model: str,
+        memory: ConversationHistory,
+    ) -> T | None:
+        raw = self._extract_failed_generation(exc)
+        if raw is None:
+            return None
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        unwrapped = self._unwrap_response_payload(payload, response_model)
+        if unwrapped is None:
+            return None
+        try:
+            parsed = response_model.model_validate(unwrapped)
+        except Exception:
+            return None
+        canonical = json.dumps(parsed.model_dump(), ensure_ascii=False)
+        self._emit_llm_io(stage, model, "output", {"message": raw, "source": "failed_generation", "memory_message": canonical})
+        memory.add_assistant_response(canonical, stage=stage, reasoning=None)
+        return parsed
+
+    @staticmethod
+    def _extract_failed_generation(exc: BadRequestError) -> str | None:
+        candidate = OpenAILLMService._extract_error_body(exc)
+
+        if isinstance(candidate, dict):
+            err = candidate.get("error")
+            if isinstance(err, dict):
+                failed = err.get("failed_generation")
+                if isinstance(failed, str):
+                    return failed
+        return None
+
+    @staticmethod
+    def _extract_error_body(exc: BadRequestError) -> dict | None:
+        def _coerce_dict(raw: str) -> dict | None:
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                try:
+                    parsed = ast.literal_eval(raw)
+                except Exception:
+                    return None
+            return parsed if isinstance(parsed, dict) else None
+
+        body = exc.body
+        if isinstance(body, dict):
+            return body
+        if isinstance(body, str):
+            return _coerce_dict(body)
+        message = str(exc)
+        if " - " in message:
+            return _coerce_dict(message.split(" - ", 1)[1].strip())
+        return None
+
+    @staticmethod
+    def _unwrap_response_payload(payload: object, response_model: Type[T]) -> dict | None:
+        required = set(response_model.model_json_schema().get("required") or [])
+
+        def is_match(obj: object) -> bool:
+            return isinstance(obj, dict) and required.issubset(obj.keys())
+
+        if is_match(payload):
+            return payload  # type: ignore[return-value]
+
+        if isinstance(payload, dict):
+            for key in ("parsed", "content", "output", "data"):
+                value = payload.get(key)
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except json.JSONDecodeError:
+                        value = None
+                if value is not None and is_match(value):
+                    return value  # type: ignore[return-value]
+
+        if isinstance(payload, str):
+            try:
+                inner = json.loads(payload)
+            except json.JSONDecodeError:
+                return None
+            if is_match(inner):
+                return inner  # type: ignore[return-value]
+
+        return None
 
     @staticmethod
     def _should_retry_rate_limit(exc: BadRequestError) -> bool:

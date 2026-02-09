@@ -1,4 +1,5 @@
 import sys
+import json
 import pprint
 from dataclasses import dataclass
 import ir_datasets
@@ -32,6 +33,7 @@ from geniie_lab.dataclasses.output import (
 )
 from geniie_lab.memory import ConversationHistory
 from geniie_lab.experiments.prompt_utils import render_instruction
+from geniie_lab.response import Clicks
 from geniie_lab.services.llm.llm_service_factory import LLMServiceFactory
 from geniie_lab.services.llm.llm_service_protocol import LLMServiceProtocol
 from geniie_lab.services.measure_service import MeasureService, Qrels, Run
@@ -230,8 +232,11 @@ class RelevanceJudgementStage:
         self.config = config
 
     def run(self, settings: ExperimentSettings, state: ExperimentState, llm_service: LLMServiceProtocol, model: ModelDescription, tool: ToolDescription, opensearch_client: OpenSearchClientProtocol) -> ExperimentState:
-        if not state.clicks or not state.serp or not state.clicks.ranking_list:
-            state.error = "Clicks/SERP not found or no documents clicked, cannot run RelevanceJudgementStage."
+        if not state.clicks or not state.serp:
+            state.error = "Clicks/SERP not found, cannot run RelevanceJudgementStage."
+            return state
+        if not state.clicks.ranking_list:
+            print("[INFO] No clicked documents; skipping Relevance Judgement Stage.", file=sys.stderr)
             return state
 
         dataset = ir_datasets.load(settings.topicset.name)
@@ -300,7 +305,13 @@ class QueryReFormulationStage:
         print("\n--- Running: Query Re-formulation Stage ---", file=sys.stderr)
         instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
         instruction_text = render_instruction(instruction_text, state)
-        qrf_instruction = QueryReFormulationInstruction(instruction=instruction_text)
+        qrf_instruction = QueryReFormulationInstruction(
+            instruction=instruction_text,
+            task=settings.task,
+            corpus=settings.corpus,
+            tool=tool,
+            topic=state.topic,
+        )
 
         state.query = llm_service.recreate_query(model.name, model.temperature, state.memory, qrf_instruction)
 
@@ -348,6 +359,102 @@ class ExperimentRunner:
         self._filter_topics_by_ids()
         self._filter_topics_by_min_rels()
         self._apply_max_topics()
+
+    @staticmethod
+    def _increment_counter(counter: Dict[str, int], key: str) -> None:
+        counter[key] = counter.get(key, 0) + 1
+
+    @staticmethod
+    def _cleanup_orphan_stage_prompt(state: ExperimentState, stage_name: str) -> None:
+        # If a stage call fails after adding its user prompt, remove that dangling prompt
+        # so fallback/default behavior is not learned from malformed turns.
+        messages = state.memory.get_all_messages()
+        if len(messages) <= 1:
+            return
+        last = messages[-1]
+        if last.get("role") == "user" and last.get("stage") == stage_name:
+            state.memory.remove_last_message()
+
+    def _emit_stage_failure_event(
+        self,
+        *,
+        stage_name: str,
+        topic_id: str,
+        model_name: str,
+        tool_name: str,
+        attempt: int,
+        retries: int,
+        exc: Exception,
+        fallback_applied: bool,
+    ) -> None:
+        payload = {
+            "event": "stage_failure",
+            "stage": stage_name,
+            "topic_id": topic_id,
+            "model": model_name,
+            "tool": tool_name,
+            "attempt": attempt,
+            "max_attempts": retries + 1,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "fallback_applied": fallback_applied,
+        }
+        print(json.dumps(payload, ensure_ascii=False), file=sys.stderr)
+
+    @staticmethod
+    def _is_transient_provider_error(exc: Exception) -> bool:
+        text = str(exc).lower()
+        return "rate limit" in text or "timeout" in text or "overloaded" in text
+
+    @staticmethod
+    def _is_retryable_stage(stage_name: str) -> bool:
+        # Query/reformulate are typically deterministic at temperature=0;
+        # retrying them on non-transient errors mostly duplicates failures.
+        return stage_name not in {"query", "reformulate"}
+
+    def _apply_resilient_fallback(
+        self,
+        *,
+        stage_name: str,
+        state: ExperimentState,
+        settings: ExperimentSettings,
+        model: ModelDescription,
+    ) -> bool:
+        if stage_name == "click":
+            state.clicks = Clicks(ranking_list=[], reason="stage_failed")
+            output = ClickExperimentOutput(
+                session_name=settings.name,
+                model=model.name,
+                task=settings.task.name,
+                dataset=settings.topicset.name,
+                topic_id=state.topic.id,
+                rankings=[],
+                doc_ids=[],
+                duplicate_doc_ids=None,
+            )
+            print(output.to_json(ensure_ascii=False))
+            return True
+
+        if stage_name == "relevance":
+            # Skip relevance for this step and continue pipeline.
+            return True
+
+        if stage_name == "reformulate" and state.query:
+            # Keep current query unchanged and continue.
+            output = QueryReformulationExperimentOutput(
+                session_name=settings.name,
+                model=model.name,
+                task=settings.task.name,
+                dataset=settings.topicset.name,
+                topic_id=state.topic.id,
+                query=state.query.query,
+                start=settings.task.start_offset,
+                size=settings.task.serp_size,
+            )
+            print(output.to_json(ensure_ascii=False))
+            return True
+
+        return False
 
     def _filter_topics_by_min_rels(self) -> None:
         if not self.settings.min_relevant_docs:
@@ -444,12 +551,68 @@ class ExperimentRunner:
                     state = ExperimentState(topic=topic, memory=memory)
 
                     try:
+                        stop_topic = False
                         for stage_name in self.settings.plan:
                             stage_runner = self.stage_runners[stage_name]
-                            state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client)
+                            retries = self.settings.stage_failure_retries if self.settings.failure_policy == "resilient" else 0
+                            attempt = 0
+                            while True:
+                                attempt += 1
+                                try:
+                                    state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client)
+                                    break
+                                except Exception as exc:
+                                    self._increment_counter(state.stage_failures, stage_name)
+                                    self._cleanup_orphan_stage_prompt(state, stage_name)
+                                    should_retry = (
+                                        attempt <= retries
+                                        and not self._is_transient_provider_error(exc)
+                                        and self._is_retryable_stage(stage_name)
+                                    )
+                                    if should_retry:
+                                        self._emit_stage_failure_event(
+                                            stage_name=stage_name,
+                                            topic_id=state.topic.id,
+                                            model_name=model.name,
+                                            tool_name=tool.name,
+                                            attempt=attempt,
+                                            retries=retries,
+                                            exc=exc,
+                                            fallback_applied=False,
+                                        )
+                                        continue
+
+                                    fallback_applied = False
+                                    if self.settings.failure_policy == "resilient":
+                                        fallback_applied = self._apply_resilient_fallback(
+                                            stage_name=stage_name,
+                                            state=state,
+                                            settings=self.settings,
+                                            model=model,
+                                        )
+                                        if fallback_applied:
+                                            self._increment_counter(state.stage_fallbacks, stage_name)
+                                    self._emit_stage_failure_event(
+                                        stage_name=stage_name,
+                                        topic_id=state.topic.id,
+                                        model_name=model.name,
+                                        tool_name=tool.name,
+                                        attempt=attempt,
+                                        retries=retries,
+                                        exc=exc,
+                                        fallback_applied=fallback_applied,
+                                    )
+                                    if not fallback_applied:
+                                        state.error = f"{type(exc).__name__}: {exc}"
+                                        stop_topic = True
+                                    break
+
                             if state.error:
                                 print(f"[WARNING] in stage '{stage_name}': {state.error}. Stopping pipeline for this topic.", file=sys.stderr)
                                 state.error = None
+                                stop_topic = True
+                            if stop_topic:
+                                break
                     finally:
                         if self.settings.full_log and state and state.memory:
                             print(f"\n{'--'*10} Full Log {'--'*10}", file=sys.stderr)

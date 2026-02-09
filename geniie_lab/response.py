@@ -1,7 +1,7 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Enums
 class Relevance(str, Enum):
@@ -19,10 +19,23 @@ class Action(Enum):
 # Models
 class Query(BaseModel):
     """A model for submitting a query to a search tool."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "query": "hubble telescope scientific discoveries",
+                    "reason": "Target specific discoveries to retrieve relevant documents.",
+                }
+            ]
+        }
+    )
+
     query: str = Field(
         ...,
         title="query",
-        description="The query string submitted to the search tool."
+        min_length=1,
+        description="A non-empty query string submitted to the search tool.",
+        examples=["hubble telescope scientific discoveries"],
     )
     start: Optional[int] = Field(
         0,
@@ -41,8 +54,26 @@ class Query(BaseModel):
     reason: str = Field(
         ...,
         title="reason",
-        description="A brief explanation of the intent behind your query."
+        min_length=1,
+        description="A brief non-empty explanation of the intent behind your query.",
+        examples=["Target specific discoveries to retrieve relevant documents."],
     )
+
+    @field_validator("query")
+    @classmethod
+    def _validate_non_empty_query(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("query must be non-empty")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_non_empty_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("reason must be non-empty")
+        return value
 
     @classmethod
     def model_json_schema(cls, *args, **kwargs):
@@ -59,18 +90,56 @@ class Clicks(BaseModel):
     """
     A model for selecting multiple documents from search results.
     """
-    ranking_list: List[int] = Field(
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "ranking_list": [1, 3, 8],
+                    "reason": "These results appear most likely relevant based on title/snippet.",
+                },
+                {
+                    "ranking_list": [],
+                    "reason": "None of the current results appears relevant.",
+                },
+            ]
+        }
+    )
+
+    ranking_list: List[Annotated[int, Field(ge=1, le=100)]] = Field(
         ...,
         title="ranking_list",
+        min_length=0,
+        max_length=10,
         description=(
-            "The ranking number of the documents in the result to examine the full text. "
-        )
+            "The ranking numbers of results to examine in full text (up to 10 unique positive integers). "
+            "Each rank must be a separate array item; do not concatenate multiple ranks into one number."
+        ),
+        examples=[[1, 3, 8], []],
     )
     reason: str = Field(
         ...,
         title="reason",
-        description="A brief explanation for selecting these documents."
+        min_length=1,
+        description="A brief non-empty explanation for selecting these documents.",
+        examples=["These results appear most likely relevant based on title/snippet."],
     )
+
+    @field_validator("ranking_list")
+    @classmethod
+    def _validate_ranking_list(cls, value: List[int]) -> List[int]:
+        if len(value) != len(set(value)):
+            raise ValueError("ranking_list must not contain duplicate ranks")
+        if any(rank < 1 for rank in value):
+            raise ValueError("ranking_list must contain only positive ranks")
+        return value
+
+    @field_validator("reason")
+    @classmethod
+    def _validate_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("reason must be non-empty")
+        return value
 
 class RelevanceJudgement(BaseModel):
     """A model for labeling a document's relevance."""

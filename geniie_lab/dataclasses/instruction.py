@@ -82,11 +82,20 @@ class RelevanceJudgementInstruction:
 @dataclass
 class QueryReFormulationInstruction:
     instruction: str
+    task: TaskDescription
+    corpus: CorpusDescription
+    tool: ToolDescription
+    topic: Union[TitleOnlyTopic, TitleDescriptionTopic, TitleNarrativeTopic, TitleDescriptionNarrativeTopic, FullTopic]
 
     def generate(self) -> str:
         instruction = f"""
             **Instruction**:
             {self.instruction}
+            ============================
+            **Task Description**: {self.task.description}
+            **Corpus Description**: {self.corpus.description}
+            **Search Tool Description**: {self.tool.description}
+            **Topic Description**: {self.topic}
         """
         return dedent(instruction).strip()
 

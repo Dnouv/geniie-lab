@@ -232,8 +232,11 @@ class RelevanceJudgementStage:
         self.config = config
 
     def run(self, settings: ExperimentSettings, state: ExperimentState, llm_service: LLMServiceProtocol, model: ModelDescription, tool: ToolDescription, opensearch_client: OpenSearchClientProtocol, stage_name: str) -> ExperimentState:
-        if not state.clicks or not state.serp or not state.clicks.ranking_list:
-            state.error = "Clicks/SERP not found or no documents clicked, cannot run RelevanceJudgementStage."
+        if not state.clicks or not state.serp:
+            state.error = "Clicks/SERP not found, cannot run RelevanceJudgementStage."
+            return state
+        if not state.clicks.ranking_list:
+            print("[INFO] No clicked documents; skipping Relevance Judgement Stage.", file=sys.stderr)
             return state
 
         dataset = ir_datasets.load(settings.topicset.name)
@@ -301,7 +304,13 @@ class QueryReFormulationStage:
         print("\n--- Running: Query Re-formulation Stage ---", file=sys.stderr)
         instruction_text = self.config.instruction or self.DEFAULT_INSTRUCTION
         instruction_text = render_instruction(instruction_text, state)
-        qrf_instruction = QueryReFormulationInstruction(instruction=instruction_text)
+        qrf_instruction = QueryReFormulationInstruction(
+            instruction=instruction_text,
+            task=settings.task,
+            corpus=settings.corpus,
+            tool=tool,
+            topic=state.topic,
+        )
 
         state.query = llm_service.recreate_query(model.name, model.temperature, state.memory, qrf_instruction)
 

@@ -44,6 +44,8 @@ class ExperimentSettings:
     custom_settings: Optional[str] = None
     full_log: Optional[bool] = False
     log_llm_io: Optional[bool] = False
+    failure_policy: Literal["strict", "resilient"] = "strict"
+    stage_failure_retries: int = 2
 
 @dataclass
 class ExperimentState:
@@ -63,6 +65,8 @@ class ExperimentState:
     judged_correct_relevant_docids: set[str] = field(default_factory=set)
     metrics_context: Optional[str] = None
     retrieved_relevant_docids_top100: set[str] = field(default_factory=set)
+    stage_failures: Dict[str, int] = field(default_factory=dict)
+    stage_fallbacks: Dict[str, int] = field(default_factory=dict)
 
 @dataclass
 class Error:

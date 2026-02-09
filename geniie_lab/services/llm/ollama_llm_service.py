@@ -5,7 +5,7 @@ from typing import Callable, Protocol, Type, TypeVar
 
 # Third-party libraries
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 from openai.types.chat import ChatCompletionUserMessageParam
 from pydantic import BaseModel
 import tiktoken
@@ -47,6 +47,26 @@ class OllamaLLMService:
         }
         print(json.dumps(record, ensure_ascii=False), file=sys.stderr)
 
+    def _emit_llm_error(
+        self,
+        stage: str | None,
+        model: str,
+        response_model_name: str,
+        exc: Exception,
+    ) -> None:
+        payload: dict = {
+            "response_model": response_model_name,
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        if isinstance(exc, BadRequestError):
+            body = getattr(exc, "body", None)
+            if isinstance(body, dict):
+                payload["error_body"] = body
+            elif isinstance(body, str):
+                payload["error_body"] = body
+        self._emit_llm_io(stage, model, "error", payload)
+
     def _call_llm_with_pydantic_response(
         self,
         model: str,
@@ -63,20 +83,24 @@ class OllamaLLMService:
         messages: list[ChatCompletionUserMessageParam] = [
             ChatCompletionUserMessageParam(role="user", content=msg["content"]) for msg in messages_dicts
         ]
-        completion = self.client.beta.chat.completions.parse(
-            model=model,
-            messages=messages,
-            response_format=response_model,
-            temperature=temperature,
-        )
-        message = completion.choices[0].message
-        parsed_response = message.parsed
-        if parsed_response is None:
-            raise ValueError(f"LLM returned empty parsed object for {response_model.__name__}.")
-        reasoning = extract_message_reasoning(message) if stage in {"query", "reformulate"} else None
-        self._emit_llm_io(stage, model, "output", {"message": message.to_json()})
-        memory.add_assistant_response(message.to_json(), stage=stage, reasoning=reasoning)
-        return parsed_response
+        try:
+            completion = self.client.beta.chat.completions.parse(
+                model=model,
+                messages=messages,
+                response_format=response_model,
+                temperature=temperature,
+            )
+            message = completion.choices[0].message
+            parsed_response = message.parsed
+            if parsed_response is None:
+                raise ValueError(f"LLM returned empty parsed object for {response_model.__name__}.")
+            reasoning = extract_message_reasoning(message) if stage in {"query", "reformulate"} else None
+            self._emit_llm_io(stage, model, "output", {"message": message.to_json()})
+            memory.add_assistant_response(message.to_json(), stage=stage, reasoning=reasoning)
+            return parsed_response
+        except Exception as exc:
+            self._emit_llm_error(stage, model, response_model.__name__, exc)
+            raise
 
     def get_tokenizer(self, model_name: str) -> Callable[[str], int]:
         enc = tiktoken.get_encoding("cl100k_base")

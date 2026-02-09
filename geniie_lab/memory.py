@@ -122,8 +122,8 @@ class ConversationHistory:
         try:
             parsed = json.loads(content)
         except json.JSONDecodeError:
-            content = re.sub(r'("query"\\s*:\\s*)"(.*?)"', r'\\1"[REDACTED]"', content, flags=re.DOTALL)
-            content = re.sub(r"('query'\\s*:\\s*)'(.*?)'", r"\\1'[REDACTED]'", content, flags=re.DOTALL)
+            content = re.sub(r'("query"\\s*:\\s*)"(.*?)"', r'\\1""', content, flags=re.DOTALL)
+            content = re.sub(r"('query'\\s*:\\s*)'(.*?)'", r"\\1''", content, flags=re.DOTALL)
             if not reasoning:
                 content = re.sub(r'("reasoning"\\s*:\\s*)"(.*?)"', r'\\1"[REDACTED]"', content, flags=re.DOTALL)
                 content = re.sub(r'("reasoning_content"\\s*:\\s*)"(.*?)"', r'\\1"[REDACTED]"', content, flags=re.DOTALL)
@@ -175,7 +175,7 @@ class ConversationHistory:
         if isinstance(obj, dict):
             for key, value in obj.items():
                 if key == "query":
-                    obj[key] = "[REDACTED]"
+                    obj[key] = ""
                 else:
                     self._redact_query_fields(value)
         elif isinstance(obj, list):
