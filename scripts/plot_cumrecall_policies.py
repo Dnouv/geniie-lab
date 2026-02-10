@@ -242,7 +242,7 @@ def plot_per_topic_segmented_policies(
                 width=0.86,
                 color=color,
                 edgecolor="black",
-                linewidth=0.35,
+                linewidth=0.2,
                 label=policy,
             )
             if idx > 0:
@@ -429,7 +429,7 @@ def plot_metric(
                 width=bar_width,
                 color=palette[topic],
                 edgecolor="black",
-                linewidth=0.4,
+                linewidth=0.2,
                 label=topic_labels.get(topic, topic),
             )
 
@@ -482,8 +482,24 @@ def main() -> None:
     else:
         raw_metrics = [m.strip() for m in args.metrics.split(",") if m.strip()]
         metrics = raw_metrics or [args.metric_key]
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    output_base = Path(args.output_dir) / ts
+    output_root = Path(args.output_dir)
+    output_root.mkdir(parents=True, exist_ok=True)
+    existing = [
+        int(p.name) for p in output_root.iterdir()
+        if p.is_dir() and p.name.isdigit()
+    ]
+    run_id = (max(existing) + 1) if existing else 0
+    output_base = output_root / str(run_id)
+    output_base.mkdir(parents=True, exist_ok=True)
+    info_path = output_base / "run_info.txt"
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    with info_path.open("w", encoding="utf-8") as handle:
+        handle.write(f"run_id: {run_id}\n")
+        handle.write(f"timestamp: {timestamp}\n")
+        handle.write(f"metrics: {', '.join(metrics)}\n")
+        handle.write(f"logs:\n")
+        for log_path, label in zip(args.log, args.label):
+            handle.write(f"  - {label}: {log_path}\n")
     for metric_key in metrics:
         metric_slug = slugify_filename(metric_key)
         output_path = output_base / metric_slug / "overview.png"
