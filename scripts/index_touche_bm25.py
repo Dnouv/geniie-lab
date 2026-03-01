@@ -1,43 +1,8 @@
 #!/usr/bin/env python
-"""Index the Touché 2022 (ArgsMe processed) corpus for BM25."""
+"""Compatibility wrapper. Use scripts/index_preset.py for new usage."""
 
-import argparse
-import subprocess
-import sys
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Index Touché 2022 (ArgsMe processed) for BM25.")
-    parser.add_argument("--host", default="localhost", help="OpenSearch host (default: %(default)s).")
-    parser.add_argument("--port", type=int, default=9200, help="OpenSearch port (default: %(default)s).")
-    parser.add_argument("--no-ssl", action="store_true", help="Use HTTP instead of HTTPS.")
-    parser.add_argument("--recreate", action="store_true", help="Delete the index if it exists.")
-    parser.add_argument("--batch-size", type=int, default=1000, help="Bulk batch size (default: %(default)s).")
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-    cmd = [
-        sys.executable,
-        "scripts/index_dataset.py",
-        "--dataset",
-        "argsme/2020-04-01/processed/touche-2022-task-1",
-        "--index",
-        "touche_2022_bm25",
-        "--host",
-        args.host,
-        "--port",
-        str(args.port),
-        "--batch-size",
-        str(args.batch_size),
-    ]
-    if args.no_ssl:
-        cmd.append("--no-ssl")
-    if args.recreate:
-        cmd.append("--recreate")
-    subprocess.run(cmd, check=True)
+from _compat import forward_to
 
 
 if __name__ == "__main__":
-    main()
+    forward_to("index_preset.py", ["--preset", "touche2022", "--retrieval", "bm25"])
