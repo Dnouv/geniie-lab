@@ -98,7 +98,8 @@ class OpenRouterLLMService:
         temperature: float,
         memory: ConversationHistory,
         instruction: InstructionWithGenerate,
-        response_model: Type[T]
+        response_model: Type[T],
+        reasoning_mode: str | None = None,
     ) -> T:
 
         stage = instruction_stage(instruction)
@@ -112,12 +113,15 @@ class OpenRouterLLMService:
         last_error: Exception | None = None
         for attempt in range(1, self._MAX_JSON_RETRIES + 1):
             try:
-                completion = self.client.beta.chat.completions.parse(
-                    model=model,
-                    messages=messages,
-                    response_format=response_model,
-                    temperature=temperature,
-                )
+                request_kwargs = {
+                    "model": model,
+                    "messages": messages,
+                    "response_format": response_model,
+                    "temperature": temperature,
+                }
+                if reasoning_mode is not None:
+                    request_kwargs["reasoning_effort"] = reasoning_mode
+                completion = self.client.beta.chat.completions.parse(**request_kwargs)
                 message = completion.choices[0].message
                 parsed_response = message.parsed
                 if parsed_response is None:
@@ -261,23 +265,23 @@ class OpenRouterLLMService:
                 return limit
         return 4096
 
-    def create_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryFormulationInstruction) -> Query:
+    def create_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryFormulationInstruction, reasoning_mode: str | None = None) -> Query:
 
-        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query)
+        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query, reasoning_mode)
         return query
 
-    def recreate_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryReFormulationInstruction) -> Query:
+    def recreate_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryReFormulationInstruction, reasoning_mode: str | None = None) -> Query:
 
-        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query)
+        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query, reasoning_mode)
         return query
 
-    def create_clicks(self, model: str, temperature: float, memory: ConversationHistory, instruction: ClickInstruction) -> Clicks:
+    def create_clicks(self, model: str, temperature: float, memory: ConversationHistory, instruction: ClickInstruction, reasoning_mode: str | None = None) -> Clicks:
 
-        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Clicks)
+        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Clicks, reasoning_mode)
 
-    def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction) -> RelevanceJudgement:
+    def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction, reasoning_mode: str | None = None) -> RelevanceJudgement:
 
-        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, RelevanceJudgement)
+        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, RelevanceJudgement, reasoning_mode)
 
-    def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction) -> NextAction:
-        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, NextAction)
+    def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction, reasoning_mode: str | None = None) -> NextAction:
+        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, NextAction, reasoning_mode)

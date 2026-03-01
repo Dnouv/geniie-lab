@@ -101,7 +101,7 @@ def main() -> None:
         plot_combined_metrics(ranking_records, combined_path, model_names)
 
         jaccard_path = out_dir / "query_jaccard_similarity.png"
-        plot_jaccard_similarity(query_records, jaccard_path, model_names)
+        plot_jaccard_similarity(query_records, jaccard_path, model_names, topic_labels)
 
         print(f"[INFO] Wrote bar plots to {out_dir}")
 

@@ -101,23 +101,23 @@ class GeminiLLMService:
     def get_max_tokens(self, model_name: str) -> int:
         return 1_048_576
 
-    def create_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryFormulationInstruction ) -> Query:
+    def create_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryFormulationInstruction, reasoning_mode: str | None = None) -> Query:
 
         query = self._call_llm_and_parse(model, temperature, memory, instruction, Query)
         return query
 
-    def recreate_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryReFormulationInstruction) -> Query:
+    def recreate_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryReFormulationInstruction, reasoning_mode: str | None = None) -> Query:
 
         query = self._call_llm_and_parse(model, temperature, memory, instruction, Query)
         return query
 
-    def create_clicks(self, model: str, temperature: float, memory: ConversationHistory, instruction: ClickInstruction) -> Clicks:
+    def create_clicks(self, model: str, temperature: float, memory: ConversationHistory, instruction: ClickInstruction, reasoning_mode: str | None = None) -> Clicks:
 
         return self._call_llm_and_parse(model, temperature, memory, instruction, Clicks)
 
-    def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction) -> RelevanceJudgement:
+    def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction, reasoning_mode: str | None = None) -> RelevanceJudgement:
 
         return self._call_llm_and_parse(model, temperature, memory, instruction, RelevanceJudgement)
 
-    def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction) -> NextAction:
+    def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction, reasoning_mode: str | None = None) -> NextAction:
         return self._call_llm_and_parse(model, temperature, memory, instruction, NextAction)

@@ -31,6 +31,7 @@ class ModelDescription:
     temperature: float
     system_prompt: Optional[str] = "You're a helpful assistant"
     system_role: Optional[str] = None
+    reasoning_mode: Optional[str] = None
 
 @dataclass
 class ToolDescription:

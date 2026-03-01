@@ -93,7 +93,8 @@ class OpenAILLMService:
         temperature: float,
         memory: ConversationHistory,
         instruction: InstructionWithGenerate,
-        response_model: Type[T]
+        response_model: Type[T],
+        reasoning_mode: str | None = None,
     ) -> T:
 
         stage = instruction_stage(instruction)
@@ -112,7 +113,7 @@ class OpenAILLMService:
                     messages=messages,
                     response_format=response_model,
                     temperature=temperature,
-                    reasoning_effort="low"
+                    reasoning_effort=reasoning_mode or "low",
                 )
                 message = completion.choices[0].message
                 parsed_response = message.parsed
@@ -255,25 +256,25 @@ class OpenAILLMService:
         for prefix, limit in self._MAX_TOKEN_LIMITS.items():
             if name.startswith(prefix):
                 return limit
-        return 120000  # Default max token limit
+        return 70000  # Default max token limit
 
-    def create_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryFormulationInstruction) -> Query:
+    def create_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryFormulationInstruction, reasoning_mode: str | None = None) -> Query:
 
-        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query)
+        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query, reasoning_mode)
         return query
 
-    def recreate_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryReFormulationInstruction) -> Query:
+    def recreate_query(self, model: str, temperature: float, memory: ConversationHistory, instruction: QueryReFormulationInstruction, reasoning_mode: str | None = None) -> Query:
 
-        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query)
+        query = self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Query, reasoning_mode)
         return query
 
-    def create_clicks(self, model: str, temperature: float, memory: ConversationHistory, instruction: ClickInstruction) -> Clicks:
+    def create_clicks(self, model: str, temperature: float, memory: ConversationHistory, instruction: ClickInstruction, reasoning_mode: str | None = None) -> Clicks:
 
-        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Clicks)
+        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, Clicks, reasoning_mode)
 
-    def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction) -> RelevanceJudgement:
+    def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction, reasoning_mode: str | None = None) -> RelevanceJudgement:
 
-        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, RelevanceJudgement)
+        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, RelevanceJudgement, reasoning_mode)
 
-    def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction) -> NextAction:
-        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, NextAction)
+    def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction, reasoning_mode: str | None = None) -> NextAction:
+        return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, NextAction, reasoning_mode)
