@@ -56,6 +56,36 @@ plan=["query", "click", "relevance"] # No ranking
 plan=["query", "ranking", "relevance"] # No click
 ```
 
+## Optional: External Memory Plugin
+
+Session Experiment optionally supports an external SQLite memory store for plugin-style memory operations.
+
+- `memory_plugin_mode="none"`: baseline (no DB access).
+- `memory_plugin_mode="context_plus_db"`:
+  - keep current in-context memory behavior.
+  - in `reformulate`, the LLM can query external memories.
+  - in `query`, `click`, `relevance`, the LLM can write/delete external memories.
+- `memory_plugin_mode="db_only_reformulate_read"`:
+  - no cross-stage in-context carryover.
+  - the LLM can still write/delete external memories in non-ranking stages.
+  - in `reformulate`, it can query and use stored memories.
+
+Memory writes are intentionally light for research runs. The LLM only provides:
+- `content`
+
+The runtime stores additional metadata such as `run_id`, `topic_id`, `stage`, `created_at`, and `memory_timestamp`.
+
+When DB read is used, the LLM can issue flexible SQL `SELECT` queries against the scoped views:
+- `topic_memories(id, content, memory_timestamp, stage, created_at)`
+- `topic_memory_sql_reads(id, stage, step_num, raw_sql_query, executed_sql_query, row_count, created_at)`
+- `db_relations(object_name, object_type, description)`
+- `db_columns(object_name, column_name, data_type, description)`
+
+Each read is audited in SQLite table `session_memory_sql_reads` with:
+- raw SQL from the model (`raw_sql_query`)
+- executed SQL (`executed_sql_query`)
+- stage, step number, row count, and created timestamp
+
 ## Sample output
 
 - `model`: `gpt-4.1-mini`

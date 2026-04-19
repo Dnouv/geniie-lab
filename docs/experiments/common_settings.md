@@ -166,9 +166,21 @@ Each stage has a name such as `query`, `ranking`, or `click`, and you can config
 - `max_topics`: Define how many topics in the dataset to be processed in the experiment. If you set to 1, it will execute the first topic (or questions or query) in the dataset. If you set to `None`, the experiment will be run on all topics. Default: `None`
 - `full_log`: Define whether or not a full interaction log with LLMs is produced at the end of each topic. Useful for debugging purpose. Make sure to catch STDERR to save the full log. Default: `False`. Alternatively, you can set the log level to `DEBUG` in the logger defined at the beginning of the runner scripts in `scripts` folder.
 - `custom_settings`: A variable to store any arbitary strings to note for an experiment (e.g., specific parameter settings). It will be included in the outputs but not to present to GII. Default: `None`
+- `memory_plugin_mode`: External memory mode for Session Experiment only.
+  - `none`: baseline, no external DB access.
+  - `context_plus_db`: preserve existing in-context memory; DB query allowed in `reformulate`; DB write/delete allowed in `query`, `click`, `relevance`.
+  - `db_only_reformulate_read`: no cross-stage in-context carryover; DB write/delete in non-ranking stages; DB query available in `reformulate`.
+- `memory_db_path`: SQLite path for external memory store.
+- `memory_max_db_ops_per_stage`: Max iterative DB operations before forced final-output fallback.
+- `memory_query_top_k`: Default retrieval depth for DB memory queries.
+- Memory-read auditing: DB read lookups are stored in SQLite table `session_memory_sql_reads`, including the model's raw SQL query and executed SQL.
 
 ```
     max_topics=1,
     full_log=False,
-    custom_settings=None
+    custom_settings=None,
+    memory_plugin_mode="none",
+    memory_db_path="logs/session_memory.sqlite",
+    memory_max_db_ops_per_stage=8,
+    memory_query_top_k=5,
 ```

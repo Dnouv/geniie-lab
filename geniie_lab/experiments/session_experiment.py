@@ -2,6 +2,7 @@ import sys
 import json
 import pprint
 import time
+from datetime import UTC, datetime
 from dataclasses import dataclass
 import ir_datasets
 import ir_measures
@@ -37,6 +38,8 @@ from geniie_lab.experiments.prompt_utils import render_instruction
 from geniie_lab.response import Clicks
 from geniie_lab.services.llm.llm_service_factory import LLMServiceFactory
 from geniie_lab.services.llm.llm_service_protocol import LLMServiceProtocol
+from geniie_lab.services.llm.memory_augmented_llm_service import MemoryAugmentedLLMService
+from geniie_lab.services.memory_store.sqlite_memory_store import SQLiteMemoryStore
 from geniie_lab.services.measure_service import MeasureService, Qrels, Run
 from geniie_lab.services.opensearch.opensearch_client_factory import OpenSearchClientFactory
 from geniie_lab.services.opensearch.opensearch_client_protocol import OpenSearchClientProtocol
@@ -356,6 +359,10 @@ class ExperimentRunner:
 
         self.llm_factory = LLMServiceFactory()
         self.opensearch_client_factory = OpenSearchClientFactory()
+        self.run_id = f"{self.settings.name}_{datetime.now(UTC).strftime('%Y%m%dT%H%M%SZ')}"
+        self.memory_store = None
+        if self.settings.memory_plugin_mode != "none":
+            self.memory_store = SQLiteMemoryStore(self.settings.memory_db_path)
         self.topics = self._load_topics()
         self._filter_topics_by_ids()
         self._filter_topics_by_min_rels()
@@ -532,44 +539,79 @@ class ExperimentRunner:
         print(f"\n{'='*20} Experimental Setting: {self.settings.name} {'='*20}", file=sys.stderr)
         memory_policy = self.settings.memory_policy or "full"
         print(f"Memory policy: {memory_policy}", file=sys.stderr)
-        for model in self.settings.models:
-            print(f"\n{'='*20} Model: {model.name} ({model.type}) {'='*20}", file=sys.stderr)
+        print(f"Memory plugin mode: {self.settings.memory_plugin_mode}", file=sys.stderr)
+        try:
+            for model in self.settings.models:
+                print(f"\n{'='*20} Model: {model.name} ({model.type}) {'='*20}", file=sys.stderr)
 
-            for tool in self.settings.tools:
-                print(f"\n{'='*20} Ranker: {tool.ranking_model} ({tool.name}) {'='*20}", file=sys.stderr)
-                opensearch_client = self.opensearch_client_factory.create_opensearch_client(settings=self.settings, tool=tool)
+                for tool in self.settings.tools:
+                    print(f"\n{'='*20} Ranker: {tool.ranking_model} ({tool.name}) {'='*20}", file=sys.stderr)
+                    opensearch_client = self.opensearch_client_factory.create_opensearch_client(settings=self.settings, tool=tool)
 
-                for topic in self.topics:
-                    llm_service = self.llm_factory.create_llm_service(model.type, log_llm_io=self.settings.log_llm_io)
-                    print(f"\n{'--'*10} Topic: {topic.id} ({topic.title}) {'--'*10}", file=sys.stderr)
+                    for topic in self.topics:
+                        llm_service = self.llm_factory.create_llm_service(model.type, log_llm_io=self.settings.log_llm_io)
+                        if self.memory_store and self.settings.memory_plugin_mode != "none":
+                            scoped_run_id = f"{self.run_id}::{model.name}::{tool.ranking_model}"
+                            llm_service = MemoryAugmentedLLMService(
+                                base_service=llm_service,
+                                memory_store=self.memory_store,
+                                mode=self.settings.memory_plugin_mode,
+                                run_id=scoped_run_id,
+                                topic_id=topic.id,
+                                max_db_ops_per_stage=self.settings.memory_max_db_ops_per_stage,
+                                default_query_top_k=self.settings.memory_query_top_k,
+                            )
+                        print(f"\n{'--'*10} Topic: {topic.id} ({topic.title}) {'--'*10}", file=sys.stderr)
 
-                    memory = ConversationHistory(
-                        system_role=model.system_role,
-                        system_prompt=model.system_prompt,
-                        memory_policy=self.settings.memory_policy,
-                    )
-                    state = ExperimentState(topic=topic, memory=memory)
+                        memory = ConversationHistory(
+                            system_role=model.system_role,
+                            system_prompt=model.system_prompt,
+                            memory_policy=self.settings.memory_policy,
+                        )
+                        state = ExperimentState(topic=topic, memory=memory)
 
-                    try:
-                        stop_topic = False
-                        for stage_name in self.settings.plan:
-                            stage_runner = self.stage_runners[stage_name]
-                            retries = self.settings.stage_failure_retries if self.settings.failure_policy == "resilient" else 0
-                            attempt = 0
-                            while True:
-                                attempt += 1
-                                try:
-                                    state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client)
-                                    break
-                                except Exception as exc:
-                                    self._increment_counter(state.stage_failures, stage_name)
-                                    self._cleanup_orphan_stage_prompt(state, stage_name)
-                                    should_retry = (
-                                        attempt <= retries
-                                        and not self._is_transient_provider_error(exc)
-                                        and self._is_retryable_stage(stage_name)
-                                    )
-                                    if should_retry:
+                        try:
+                            stop_topic = False
+                            for stage_name in self.settings.plan:
+                                stage_runner = self.stage_runners[stage_name]
+                                retries = self.settings.stage_failure_retries if self.settings.failure_policy == "resilient" else 0
+                                attempt = 0
+                                while True:
+                                    attempt += 1
+                                    try:
+                                        state = stage_runner.run(self.settings, state, llm_service, model, tool, opensearch_client)
+                                        break
+                                    except Exception as exc:
+                                        self._increment_counter(state.stage_failures, stage_name)
+                                        self._cleanup_orphan_stage_prompt(state, stage_name)
+                                        should_retry = (
+                                            attempt <= retries
+                                            and not self._is_transient_provider_error(exc)
+                                            and self._is_retryable_stage(stage_name)
+                                        )
+                                        if should_retry:
+                                            self._emit_stage_failure_event(
+                                                stage_name=stage_name,
+                                                topic_id=state.topic.id,
+                                                model_name=model.name,
+                                                tool_name=tool.name,
+                                                attempt=attempt,
+                                                retries=retries,
+                                                exc=exc,
+                                                fallback_applied=False,
+                                            )
+                                            continue
+
+                                        fallback_applied = False
+                                        if self.settings.failure_policy == "resilient":
+                                            fallback_applied = self._apply_resilient_fallback(
+                                                stage_name=stage_name,
+                                                state=state,
+                                                settings=self.settings,
+                                                model=model,
+                                            )
+                                            if fallback_applied:
+                                                self._increment_counter(state.stage_fallbacks, stage_name)
                                         self._emit_stage_failure_event(
                                             stage_name=stage_name,
                                             topic_id=state.topic.id,
@@ -578,45 +620,26 @@ class ExperimentRunner:
                                             attempt=attempt,
                                             retries=retries,
                                             exc=exc,
-                                            fallback_applied=False,
+                                            fallback_applied=fallback_applied,
                                         )
-                                        continue
+                                        if not fallback_applied:
+                                            state.error = f"{type(exc).__name__}: {exc}"
+                                            stop_topic = True
+                                        break
 
-                                    fallback_applied = False
-                                    if self.settings.failure_policy == "resilient":
-                                        fallback_applied = self._apply_resilient_fallback(
-                                            stage_name=stage_name,
-                                            state=state,
-                                            settings=self.settings,
-                                            model=model,
-                                        )
-                                        if fallback_applied:
-                                            self._increment_counter(state.stage_fallbacks, stage_name)
-                                    self._emit_stage_failure_event(
-                                        stage_name=stage_name,
-                                        topic_id=state.topic.id,
-                                        model_name=model.name,
-                                        tool_name=tool.name,
-                                        attempt=attempt,
-                                        retries=retries,
-                                        exc=exc,
-                                        fallback_applied=fallback_applied,
-                                    )
-                                    if not fallback_applied:
-                                        state.error = f"{type(exc).__name__}: {exc}"
-                                        stop_topic = True
+                                if state.error:
+                                    print(f"[WARNING] in stage '{stage_name}': {state.error}. Stopping pipeline for this topic.", file=sys.stderr)
+                                    state.error = None
+                                    stop_topic = True
+                                if stop_topic:
                                     break
-
-                            if state.error:
-                                print(f"[WARNING] in stage '{stage_name}': {state.error}. Stopping pipeline for this topic.", file=sys.stderr)
-                                state.error = None
-                                stop_topic = True
-                            if stop_topic:
-                                break
-                    finally:
-                        if self.settings.full_log and state and state.memory:
-                            print(f"\n{'--'*10} Full Log {'--'*10}", file=sys.stderr)
-                            all_messages = state.memory.get_all_messages()
-                            pprint.pprint(all_messages, stream=sys.stderr)
-                    if self.settings.topic_sleep_seconds > 0:
-                        time.sleep(self.settings.topic_sleep_seconds)
+                        finally:
+                            if self.settings.full_log and state and state.memory:
+                                print(f"\n{'--'*10} Full Log {'--'*10}", file=sys.stderr)
+                                all_messages = state.memory.get_all_messages()
+                                pprint.pprint(all_messages, stream=sys.stderr)
+                        if self.settings.topic_sleep_seconds > 0:
+                            time.sleep(self.settings.topic_sleep_seconds)
+        finally:
+            if self.memory_store is not None:
+                self.memory_store.close()

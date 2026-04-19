@@ -28,6 +28,16 @@ class InstructionWithGenerate(Protocol):
     def generate(self) -> str:
         ...
 
+
+class RawPromptInstruction:
+    def __init__(self, prompt: str, stage_name: str | None = None):
+        self.prompt = prompt
+        self.stage_name = stage_name
+
+    def generate(self) -> str:
+        return self.prompt
+
+
 class OllamaLLMService:
     def __init__(self, log_llm_io: bool = False):
         self.client = OpenAI(
@@ -133,3 +143,23 @@ class OllamaLLMService:
 
     def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction, reasoning_mode: str | None = None) -> NextAction:
         return self._call_llm_with_pydantic_response(model, temperature, memory, instruction, NextAction, reasoning_mode)
+
+    def generate_structured(
+        self,
+        model: str,
+        temperature: float,
+        memory: ConversationHistory,
+        prompt: str,
+        response_model: Type[T],
+        reasoning_mode: str | None = None,
+        stage: str | None = None,
+    ) -> T:
+        instruction = RawPromptInstruction(prompt=prompt, stage_name=stage)
+        return self._call_llm_with_pydantic_response(
+            model=model,
+            temperature=temperature,
+            memory=memory,
+            instruction=instruction,
+            response_model=response_model,
+            reasoning_mode=reasoning_mode,
+        )

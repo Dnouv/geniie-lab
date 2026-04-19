@@ -47,6 +47,10 @@ class ExperimentSettings:
     failure_policy: Literal["strict", "resilient"] = "strict"
     stage_failure_retries: int = 2
     topic_sleep_seconds: float = 0.0
+    memory_plugin_mode: Literal["none", "context_plus_db", "db_only_reformulate_read"] = "none"
+    memory_db_path: str = "logs/session_memory.sqlite"
+    memory_max_db_ops_per_stage: int = 8
+    memory_query_top_k: int = 5
 
 @dataclass
 class ExperimentState:

@@ -36,3 +36,7 @@ The following parameters can be configured via `ExperimentSettings` in the runne
 |Other|All|`max_topics`|1|Number of topics to use. `None` means all topics (Default: `None`)|
 |Other|All|`full_log`|False|Toggle the outputs of full interaction log with LLMs.|
 |Other|All|`custom_settings`|None|Arbitary strings to note for an experiment (e.g., specific parameter settings)|
+|Other|Session|`memory_plugin_mode`|none|External memory mode: `none`, `context_plus_db`, or `db_only_reformulate_read`.|
+|Other|Session|`memory_db_path`|logs/session_memory.sqlite|SQLite path for external memory records.|
+|Other|Session|`memory_max_db_ops_per_stage`|8|Max number of iterative memory operations the LLM can execute per stage before final answer fallback.|
+|Other|Session|`memory_query_top_k`|5|Default number of memories returned by `query_memory` when `top_k` is not specified.|

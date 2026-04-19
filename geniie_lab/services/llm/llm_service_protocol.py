@@ -1,5 +1,8 @@
 # Standard library
-from typing import Callable, Protocol
+from typing import Callable, Protocol, Type
+
+# Third-party libraries
+from pydantic import BaseModel
 
 # Local application imports
 from geniie_lab.dataclasses.instruction import (
@@ -23,6 +26,17 @@ class LLMServiceProtocol(Protocol):
     def calc_relevance_judgement(self, model: str, temperature: float, memory: ConversationHistory, instruction: RelevanceJudgementInstruction, reasoning_mode: str | None = None) -> RelevanceJudgement:
         ...
     def decide_next_action(self, model: str, temperature: float, memory: ConversationHistory, instruction: NextActionInstruction, reasoning_mode: str | None = None) -> NextAction:
+        ...
+    def generate_structured(
+        self,
+        model: str,
+        temperature: float,
+        memory: ConversationHistory,
+        prompt: str,
+        response_model: Type[BaseModel],
+        reasoning_mode: str | None = None,
+        stage: str | None = None,
+    ) -> BaseModel:
         ...
     def get_tokenizer(self, model_name: str) -> Callable[[str], int]: ...
     def get_max_tokens(self, model_name: str) -> int: ...

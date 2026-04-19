@@ -10,6 +10,9 @@ from geniie_lab.dataclasses.instruction import (
 
 
 def instruction_stage(instruction) -> Optional[str]:
+    stage_name = getattr(instruction, "stage_name", None)
+    if isinstance(stage_name, str) and stage_name:
+        return stage_name
     if isinstance(instruction, QueryFormulationInstruction):
         return "query"
     if isinstance(instruction, QueryReFormulationInstruction):
